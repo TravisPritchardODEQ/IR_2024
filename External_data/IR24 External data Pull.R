@@ -23,8 +23,8 @@ source('External_data/ancillary files/pdx_BES_pass.R')
 
 BES <- PDX_BES_data(userid, pass,
                      save_location = "C:/Users/tpritch/Oregon/DEQ - Integrated Report - IR 2024/DataAssembly/BES/",
-                     startdate = '2016/01/01',
-                     enddate = '2020/12/31')
+                     startdate = '2018/01/01',
+                     enddate = '2022/12/31')
 
 
   
