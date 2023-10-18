@@ -315,12 +315,119 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
     summarise(distinct_years_sufficient_spawn_period = n_distinct(year[num_spawn > .8 * min(spawn_length)]))
   
   
+
+# Delist_crit_period_check ----------------------------------------------------------------------------------------
+# This section performs the temperature delisting minimum data check
+  #spawn_crit_periods is a table of spawning critical periods. We make them dates, assess each result as inside or ourisde these date ranges
+  #and then sum up number of years covering at least 80% of these dates. 
+  
+  
+  # Table of spawning critical periods
+  spawn_crit_periods <- data.frame(
+    stringsAsFactors = FALSE,
+    SpawnCode = c(12L,13L,14L,15L,
+                  16L,18L,19L,20L,21L,22L,23L,24L,25L,27L,
+                  28L,29L,30L),
+    Spawn_Dates = c("September 1 - May 15","September 1 - June 15",
+                    "September 15 - May 15","September 15 - June 15",
+                    "October 23 - April 15","October 1 - June 15","October 15 - May 15",
+                    "October 15 - June 15","November 1 - May 15",
+                    "November 1 - May 1","November 1 - June 15",
+                    "January 1 - May 15","January 1 - June 15",
+                    "August 1 - June 15","August 15 - June 15","August 15 - May 15",
+                    "October 15 - March 31"),
+    Total_Spawning_Days = c(257L,288L,242L,
+                            273L,174L,257L,212L,243L,195L,181L,226L,134L,
+                            165L,318L,305L,273L,167L),
+    Fall_Critical_Period = c("9/01 - 11/30",
+                             "9/01 - 11/30","9/15 - 11/30","9/15 - 11/30",
+                             "10/23 - 11/30","10/01 - 11/30","10/15 - 11/30",
+                             "10/15 - 11/30","11/01 - 11/30","11/01 - 11/30",
+                             "11/01 - 11/30",NA_character_,NA_character_,"8/01 - 11/30","8/15 - 11/30",
+                             "8/15 - 11/30","10/15 - 11/30"),
+    Spring_Critical_Period = c("4/01 - 5/15",
+                               "4/01 - 6/15","4/01 - 5/15","4/01 - 6/15",
+                               "4/01 - 4/15","4/01 - 6/15","4/01 - 5/15","4/01 - 6/15",
+                               "4/01 - 5/15","4/01 - 5/01","4/01 - 6/15",
+                               "4/01 - 5/15","4/01 - 6/15","4/01 - 6/15","4/01 - 6/15",
+                               "4/01 - 5/15",NA_character_)
+  )
+  
+  
+  spawn_delist_crit_period_check <- ws_3_year |> 
+    ungroup() |> 
+    #Filter to only results in spawning periods
+    filter(Spawn_type == "Spawn") %>%
+    #join table of spawning critical periods
+    left_join(spawn_crit_periods) |> 
+    #Break up the ranges of critical periods into start/end dates
+    mutate(fall_crit_start = word(Fall_Critical_Period, 1),
+           fall_crit_end = word(Fall_Critical_Period, 3),
+           spring_crit_start = word(Spring_Critical_Period, 1),
+           spring_crit_end = word(Spring_Critical_Period, 3)) |>
+    #Add year of result to spawn dates to get actual date of spawning periods
+    mutate(fall_crit_start = case_when(!is.na(fall_crit_start) ~ paste0(fall_crit_start, "/", year(SampleStartDate))),
+           fall_crit_end = case_when(!is.na(fall_crit_end) ~ paste0(fall_crit_end, "/", year(SampleStartDate))),
+           spring_crit_start = case_when(!is.na(spring_crit_start) ~ paste0(spring_crit_start, "/", year(SampleStartDate))),
+           spring_crit_end = case_when(!is.na(spring_crit_end) ~ paste0(spring_crit_end, "/", year(SampleStartDate))),
+    ) |> 
+    #format as date type
+    mutate(fall_crit_start = mdy(fall_crit_start),
+           fall_crit_end = mdy(fall_crit_end),
+           spring_crit_start = mdy(spring_crit_start),
+           spring_crit_end = mdy(spring_crit_end)
+    ) |> 
+    #calculate number of critical spawning dates in each period
+    mutate(total_fall_crit_dates = fall_crit_end - fall_crit_start + 1,
+           total_spring_crit_dates = spring_crit_end - spring_crit_start + 1) |> 
+    #Determin if sample is inside of critical spawning period date ranges
+    mutate(is_fall_crit = case_when(between(SampleStartDate,fall_crit_start, fall_crit_end ) ~ 1,
+                                    !(between(SampleStartDate,fall_crit_start, fall_crit_end )) ~ 0),
+           is.spring_crit =  case_when(between(SampleStartDate,spring_crit_start, spring_crit_end ) ~ 1,
+                                       !(between(SampleStartDate,spring_crit_start, spring_crit_end )) ~ 0)) |> 
+    group_by(MLocID, year(Start_spawn)) |>
+    #summarize my mlocID the number of results in critical period date range as well as if it is >= 80% of total critical spawning dates
+    summarise(Spawn_Dates = first(Spawn_Dates),
+              Start_spawn = first(Start_spawn),
+              End_spawn = first(End_spawn),
+              fall_crit_start = max(fall_crit_start),
+              fall_crit_end = max(fall_crit_end),
+              spring_crit_start = max(spring_crit_start),
+              spring_crit_end = max(spring_crit_end),
+              num_fall_crit_dates = max(total_fall_crit_dates),
+              total_fall_crit_date_results = n_distinct(SampleStartDate[is_fall_crit == 1]),
+              num_spring_crit_dates = max(total_spring_crit_dates),
+              total_spring_crit_date_results = n_distinct(SampleStartDate[is.spring_crit == 1]),
+              meets_fall_delist_min = case_when(total_fall_crit_date_results >= 0.8 * num_fall_crit_dates ~ 1,
+                                                is.na(num_fall_crit_dates) ~ NA_integer_,
+                                                TRUE ~ 0),
+              meets_spring_delist_min = case_when(total_spring_crit_date_results >= 0.8 * num_spring_crit_dates ~ 1,
+                                                  is.na(num_spring_crit_dates) ~ NA_integer_,
+                                                  TRUE ~ 0),
+              meets_delist_mins = case_when(anyNA(meets_fall_delist_min, meets_spring_delist_min) & sum(meets_fall_delist_min, meets_spring_delist_min, na.rm = TRUE) == 1 ~ 1,
+                                            !anyNA(meets_fall_delist_min, meets_spring_delist_min) & sum(meets_fall_delist_min, meets_spring_delist_min, na.rm = TRUE) == 2 ~ 1,
+                                            TRUE ~ 0)) |> 
+    group_by(MLocID) |> 
+    #get total years that meets condition
+    summarise(num_yrs_meets_delist_mins = sum(meets_delist_mins))
+  
+  
+
+# end Ws spawn crit period check ----------------------------------------------------------------------------------
+
+
+# ws spawn categorization -----------------------------------------------------------------------------------------
+
+  
+  
+  
   
   
   temp_IR_categories_WS_spawn <- ws_3_year %>%
     filter(Spawn_type == "Spawn") %>%
     mutate(spawn_length = as.double(difftime(End_spawn,Start_spawn,unit="days"))) %>%
     left_join(crit_period_check) %>%
+    left_join(spawn_delist_crit_period_check) |> 
     group_by(AU_ID, MLocID, AU_GNIS_Name, Pollu_ID, wqstd_code) %>%
     summarise( Temp_Criteria = 13,
                data_period_start = min(SampleStartDate),
@@ -332,6 +439,7 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
                distinct_years = n_distinct(year(SampleStartDate)),
                spawn_period_length = first(spawn_length),
                distinct_years_sufficient_spawn_period = max(distinct_years_sufficient_spawn_period),
+               distinct_years_sufficient_spawn_period_delist = max(num_yrs_meets_delist_mins),
                total_results = n()
     ) %>%
     mutate(period = "spawn",
@@ -360,7 +468,7 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
   WS_GNIS_rollup_spawn <- temp_IR_categories_WS_spawn %>%
     ungroup() %>%
     group_by(AU_ID, AU_GNIS_Name, Pollu_ID, wqstd_code, period) %>%
-    summarise(distinct_years_sufficient_crit_period_max = max(distinct_years_sufficient_spawn_period),
+    summarise(distinct_years_sufficient_crit_period_max = max(distinct_years_sufficient_spawn_period_delist),
               IR_category_GNIS_24 = max(IR_category),
               Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ) ) %>% 
     mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c("Unassessed",'3D',"3", "3B","3C", "2", "5", '4A', '4B', '4C'), ordered=TRUE)) |> 
@@ -437,10 +545,71 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
     group_by(AU_ID, MLocID,  Pollu_ID, wqstd_code) %>%
     summarise(distinct_years_sufficient_spawn_period = n_distinct(year[num_spawn > .8 * min(spawn_length)]))
   
+  
+  
+  spawn_delist_crit_period_check <- other_3_year |> 
+    ungroup() |> 
+    #Filter to only results in spawning periods
+    filter(Spawn_type == "Spawn") %>%
+    #join table of spawning critical periods
+    left_join(spawn_crit_periods) |> 
+    #Break up the ranges of critical periods into start/end dates
+    mutate(fall_crit_start = word(Fall_Critical_Period, 1),
+           fall_crit_end = word(Fall_Critical_Period, 3),
+           spring_crit_start = word(Spring_Critical_Period, 1),
+           spring_crit_end = word(Spring_Critical_Period, 3)) |>
+    #Add year of result to spawn dates to get actual date of spawning periods
+    mutate(fall_crit_start = case_when(!is.na(fall_crit_start) ~ paste0(fall_crit_start, "/", year(SampleStartDate))),
+           fall_crit_end = case_when(!is.na(fall_crit_end) ~ paste0(fall_crit_end, "/", year(SampleStartDate))),
+           spring_crit_start = case_when(!is.na(spring_crit_start) ~ paste0(spring_crit_start, "/", year(SampleStartDate))),
+           spring_crit_end = case_when(!is.na(spring_crit_end) ~ paste0(spring_crit_end, "/", year(SampleStartDate))),
+    ) |> 
+    #format as date type
+    mutate(fall_crit_start = mdy(fall_crit_start),
+           fall_crit_end = mdy(fall_crit_end),
+           spring_crit_start = mdy(spring_crit_start),
+           spring_crit_end = mdy(spring_crit_end)
+    ) |> 
+    #calculate number of critical spawning dates in each period
+    mutate(total_fall_crit_dates = fall_crit_end - fall_crit_start + 1,
+           total_spring_crit_dates = spring_crit_end - spring_crit_start + 1) |> 
+    #Determin if sample is inside of critical spawning period date ranges
+    mutate(is_fall_crit = case_when(between(SampleStartDate,fall_crit_start, fall_crit_end ) ~ 1,
+                                    !(between(SampleStartDate,fall_crit_start, fall_crit_end )) ~ 0),
+           is.spring_crit =  case_when(between(SampleStartDate,spring_crit_start, spring_crit_end ) ~ 1,
+                                       !(between(SampleStartDate,spring_crit_start, spring_crit_end )) ~ 0)) |> 
+    group_by(AU_ID, year(Start_spawn)) |>
+    #summarize my mlocID the number of results in critical period date range as well as if it is >= 80% of total critical spawning dates
+    summarise(Spawn_Dates = first(Spawn_Dates),
+              Start_spawn = first(Start_spawn),
+              End_spawn = first(End_spawn),
+              fall_crit_start = max(fall_crit_start),
+              fall_crit_end = max(fall_crit_end),
+              spring_crit_start = max(spring_crit_start),
+              spring_crit_end = max(spring_crit_end),
+              num_fall_crit_dates = max(total_fall_crit_dates),
+              total_fall_crit_date_results = n_distinct(SampleStartDate[is_fall_crit == 1]),
+              num_spring_crit_dates = max(total_spring_crit_dates),
+              total_spring_crit_date_results = n_distinct(SampleStartDate[is.spring_crit == 1]),
+              meets_fall_delist_min = case_when(total_fall_crit_date_results >= 0.8 * num_fall_crit_dates ~ 1,
+                                                is.na(num_fall_crit_dates) ~ NA_integer_,
+                                                TRUE ~ 0),
+              meets_spring_delist_min = case_when(total_spring_crit_date_results >= 0.8 * num_spring_crit_dates ~ 1,
+                                                  is.na(num_spring_crit_dates) ~ NA_integer_,
+                                                  TRUE ~ 0),
+              meets_delist_mins = case_when(anyNA(meets_fall_delist_min, meets_spring_delist_min) & sum(meets_fall_delist_min, meets_spring_delist_min, na.rm = TRUE) == 1 ~ 1,
+                                            !anyNA(meets_fall_delist_min, meets_spring_delist_min) & sum(meets_fall_delist_min, meets_spring_delist_min, na.rm = TRUE) == 2 ~ 1,
+                                            TRUE ~ 0)) |> 
+    group_by(AU_ID) |> 
+    #get total years that meets condition
+    summarise(num_yrs_meets_delist_mins = sum(meets_delist_mins))
+  
+  
   temp_IR_categories_other_spawn <- other_3_year %>%
     filter(Spawn_type == "Spawn") %>%
     mutate(spawn_length = as.double(difftime(End_spawn,Start_spawn,unit="days"))) %>%
-    left_join(crit_period_check) %>%
+   # left_join(crit_period_check) %>%
+    left_join(spawn_delist_crit_period_check) |> 
     group_by(AU_ID,  Pollu_ID, wqstd_code) %>%
     summarise( Temp_Criteria = 13,
                data_period_start = min(SampleStartDate),
@@ -451,7 +620,7 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
                max_3yr_results_in_spawn_period = max(samples_spawn),
                distinct_years = n_distinct(year(SampleStartDate)),
                spawn_period_length = first(spawn_length),
-               distinct_years_sufficient_spawn_period = max(distinct_years_sufficient_spawn_period),
+               distinct_years_sufficient_spawn_period = max(num_yrs_meets_delist_mins),
                total_results = n()
     ) %>%
     mutate(period = "spawn",
