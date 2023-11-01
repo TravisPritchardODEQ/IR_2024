@@ -23,37 +23,39 @@ IR.sql <-   DBI::dbConnect(odbc::odbc(), "IR_Dev")
 # # This script queries input raw, but includes all the paramter view conditions. 
 # # This allows us to check duplciates only on data used in the parameter assessments
 # 
-# getSQL <- function(filepath){
-#   con = file(filepath, "r")
-#   sql.string <- ""
-#   
-#   while (TRUE){
-#     line <- readLines(con, n = 1)
-#     
-#     if ( length(line) == 0 ){
-#       break
-#     }
-#     
-#     line <- gsub("\\t", " ", line)
-#     
-#     if(grepl("--",line) == TRUE){
-#       line <- paste(sub("--","/*",line),"*/")
-#     }
-#     
-#     sql.string <- paste(sql.string, line)
-#   }
-#   
-#   close(con)
-#   return(sql.string)
-# }
-# 
-# 
-# 
-# IR_Res_qry <- getSQL("Validation/InputRaw limited to data views.sql")
-# 
-# 
-# IR_res_db <- DBI::dbGetQuery(IR.sql, glue_sql(IR_Res_qry, .con = IR.sql))
-IR_res_db <- dbReadTable(IR.sql, 'ResultsRawWater')
+getSQL <- function(filepath){
+  con = file(filepath, "r")
+  sql.string <- ""
+
+  while (TRUE){
+    line <- readLines(con, n = 1)
+
+    if ( length(line) == 0 ){
+      break
+    }
+
+    line <- gsub("\\t", " ", line)
+
+    if(grepl("--",line) == TRUE){
+      line <- paste(sub("--","/*",line),"*/")
+    }
+
+    sql.string <- paste(sql.string, line)
+  }
+
+  close(con)
+  return(sql.string)
+}
+
+
+
+IR_Res_qry <- getSQL("Validation/InputRaw limited to data views.sql")
+
+
+IR_res_db <- DBI::dbGetQuery(IR.sql, glue_sql(IR_Res_qry, .con = IR.sql))
+# IR_res_db <- dbReadTable(IR.sql, 'ResultsRawWater')
+
+
 
 # Get data exclusion table
 
@@ -62,8 +64,9 @@ exclusions <- dbReadTable(IR.sql, 'Unused_Results')
 
 IR_res <- IR_res_db %>%
   filter(!Result_UID %in% exclusions$Result_UID)
-
-
+# 
+# no_result <- IR_res |> 
+#   filter(is.na(Result_Numeric))
 
 # Straight Duplicates ---------------------------------------------------------------------------------------------
 
@@ -84,7 +87,7 @@ straight_duplicates <- IR_res %>%
            Result_Depth,
            Analytical_method,
            Result_Unit,
-           #wqstd_code,
+           wqstd_code,
            Sample_Fraction,
            Char_Speciation,
            Time_Basis) %>%
@@ -116,7 +119,7 @@ day_time_dups <- IR_res %>%
            act_depth_height,
            Result_Depth,
            Analytical_method,
-           #wqstd_code,
+           wqstd_code,
            Sample_Fraction,
            Char_Speciation,
            Time_Basis) %>%
@@ -133,7 +136,14 @@ day_time_dups <- IR_res %>%
 
 
 
+  
+  
+  
 
+
+test <- qualifiers |> 
+  filter(num_qualifiers > 1) |> 
+  arrange(group_num)
 
 # Write to excel --------------------------------------------------------------------------------------------------
 # 
@@ -142,4 +152,42 @@ day_time_dups <- IR_res %>%
 
 
 all_together <- bind_rows(straight_duplicates, day_time_dups)
-write.xlsx(all_together,  file = "Validation/AWQMS_duplicates.xlsx")
+
+
+write.xlsx(all_together,  file = paste0("Validation/AWQMS_duplicates_", Sys.Date(),".xlsx"))
+# add to exclude --------------------------------------------------------------------------------------------------
+# 
+# # Connect to the IR database
+# IR.sql <-   DBI::dbConnect(odbc::odbc(), "IR_Dev")
+# 
+# 
+# pH_mv <- all_together |> 
+#   filter(Result_Unit == 'mV' & Char_Name == 'pH') |> 
+#   select(Result_UID, Char_Name) |> 
+#   mutate(Data_Review_Comment = "pH in mV")
+# 
+# dbAppendTable(IR.sql, 'Unused_Results', pH_mv,row.names = NULL)
+#   
+# 
+# 
+# na_result <- all_together |> 
+#   filter(is.na(Result_Numeric))|> 
+#   select(Result_UID, Char_Name) |> 
+#   mutate(Data_Review_Comment = "No numeric result")
+# 
+# dbAppendTable(IR.sql, 'Unused_Results', na_result,row.names = NULL)
+
+# dup_exclude <- straight_duplicates |>
+#   ungroup() |>
+#   mutate(min_QL = pmin(MDLValue,MRLValue )) |>
+#   group_by(group_num) |>
+#   #mutate(num_QL = n_distinct(min_QL))
+#   filter(row_number() != 1) |>
+#   ungroup() |>
+#   select(Result_UID, Char_Name) |>
+#   mutate(Data_Review_Comment = "Duplicate value")
+# # 
+# dbAppendTable(IR.sql, 'Unused_Results', dup_exclude,row.names = NULL)
+
+
+           
