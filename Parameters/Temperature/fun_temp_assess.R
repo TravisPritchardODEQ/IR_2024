@@ -220,7 +220,10 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
     mutate(Year_listed = case_when(status_change %in% c("Attain to Impaired", "Insufficient to Impaired","New Assessment") &
                                      IR_category_AU_24  %in% c('5','4A','4B', '4C') &
                                      is.na(Year_listed) ~ '2024',
-                                   TRUE ~ Year_listed))
+                                   TRUE ~ Year_listed),
+           year_last_assessed = case_when(status_change != 'No change in status- No New Assessment' ~"2024",
+                                                 TRUE ~ year_last_assessed)
+           )
 
     
 
@@ -680,43 +683,49 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
     
     wb <- createWorkbook()
     addWorksheet(wb, sheetName = "Temperature Data")
+    addWorksheet(wb, sheetName = "YrRnd WS MLOC cat")
     addWorksheet(wb, sheetName = "YrRnd WS GNIS cat")
     addWorksheet(wb, sheetName = "YrRnd WS AU cat")
     addWorksheet(wb, sheetName = "YrRnd Other AU cat")
+    addWorksheet(wb, sheetName = "Spawn WS MLOC cat")
     addWorksheet(wb, sheetName = "Spawn WS GNIS cat")
     addWorksheet(wb, sheetName = "Spawn WS AU cat")
     addWorksheet(wb, sheetName = "Spawn Other AU cat")
     
     header_st <- createStyle(textDecoration = "Bold", border = "Bottom")
     freezePane(wb, "Temperature Data", firstRow = TRUE) 
+    freezePane(wb, "YrRnd WS MLOC cat", firstRow = TRUE) 
     freezePane(wb, "YrRnd WS GNIS cat", firstRow = TRUE)
     freezePane(wb, "YrRnd WS AU cat", firstRow = TRUE)
     freezePane(wb, "YrRnd Other AU cat", firstRow = TRUE)
+    freezePane(wb, "Spawn WS MLOC cat", firstRow = TRUE)
     freezePane(wb, "Spawn WS GNIS cat", firstRow = TRUE)
     freezePane(wb, "Spawn WS AU cat", firstRow = TRUE)
     freezePane(wb, "Spawn WS AU cat", firstRow = TRUE)
     
     writeData(wb = wb, sheet = "Temperature Data", x = temp_air_exclusion, headerStyle = header_st)
+    writeData(wb = wb, sheet = "YrRnd WS MLOC cat", x = temp_IR_categories_WS, headerStyle = header_st)
     writeData(wb = wb, sheet = "YrRnd WS GNIS cat", x = WS_GNIS_rollup_delist, headerStyle = header_st)
     writeData(wb = wb, sheet = "YrRnd WS AU cat", x = WS_AU_rollup_joined , headerStyle = header_st)
     writeData(wb = wb, sheet = "YrRnd Other AU cat", x = temp_IR_categories_other_delist, headerStyle = header_st )
+    writeData(wb = wb, sheet = "Spawn WS MLOC cat", x = temp_IR_categories_WS_spawn, headerStyle = header_st )
     writeData(wb = wb, sheet = "Spawn WS GNIS cat", x = WS_AU_rollup_joined_spawn , headerStyle = header_st )
     writeData(wb = wb, sheet = "Spawn WS AU cat", x = WS_AU_rollup_spawn, headerStyle = header_st )
     writeData(wb = wb, sheet = "Spawn Other AU cat", x = temp_IR_categories_other_delist, headerStyle = header_st )
     
     print("Writing excel doc")
-    saveWorkbook(wb, "Parameters/Outputs/temperature.xlsx", overwrite = TRUE) 
+    saveWorkbook(wb, paste0("Parameters/Outputs/temperature-",Sys.Date(), ".xlsx"), overwrite = TRUE) 
     
   }
   
   
-  temperature <-list(temperature=as.data.frame(temp_air_exclusion),
-                     year_round_ws_station_categorization=as.data.frame(temp_IR_categories_WS),
-                     year_round_ws_au_categorization=as.data.frame(WS_AU_rollup),
-                     year_round_other_au_categorization=as.data.frame(temp_IR_categories_other),
-                     spawn_ws_station_categorization=as.data.frame(temp_IR_categories_WS_spawn),
-                     spawn_ws_au_categorization=as.data.frame(WS_AU_rollup_spawn),
-                     spawn_other_au_categorization=as.data.frame(temp_IR_categories_other_spawn))
-  
-  return(temperature)
+  # temperature <-list(temperature=as.data.frame(temp_air_exclusion),
+  #                    year_round_ws_station_categorization=as.data.frame(temp_IR_categories_WS),
+  #                    year_round_ws_au_categorization=as.data.frame(WS_AU_rollup),
+  #                    year_round_other_au_categorization=as.data.frame(temp_IR_categories_other),
+  #                    spawn_ws_station_categorization=as.data.frame(temp_IR_categories_WS_spawn),
+  #                    spawn_ws_au_categorization=as.data.frame(WS_AU_rollup_spawn),
+  #                    spawn_other_au_categorization=as.data.frame(temp_IR_categories_other_spawn))
+  # 
+  # return(temperature)
 }
