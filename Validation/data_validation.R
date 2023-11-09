@@ -18,7 +18,9 @@
 validate_data <- function(database = "IR_Dev"){
 
 library(tidyverse)
-
+library(glue)
+library(DBI)
+  library(openxlsx)
 
 Data_validation_values <- read.csv("Validation/Data_validation_values.csv") %>%
   mutate(Char_Speciation = ifelse(Char_Speciation == 'NULL', NA_character_, Char_Speciation ),
@@ -119,8 +121,10 @@ validation <- joined %>%
          manual_validation_result = "")
 
 manual_check <- validation %>%
-  filter(!is.na(validation_result)) %>%
-  select(all_of(column_order))
+  filter(!is.na(validation_result),
+         Result_Operator != '<') %>%
+  select(all_of(column_order)) |> 
+  
 
 print("Validation/data_validation_manual_review.csv" )
 
