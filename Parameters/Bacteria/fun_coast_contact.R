@@ -1,0 +1,323 @@
+library(lubridate)
+library(runner)
+library(odeqIRtools)
+
+
+
+
+
+coast_contact <- function(df, type = "coast", write_excel = TRUE){
+# Testing and development settings --------------------------------------------------------------------------------
+
+
+ #df <- entero_data 
+ # type = "freshwater"
+ #write_excel = TRUE
+
+  
+
+# Filter data down. -----------------------------------------------------------------------------------------------
+
+#if doing coast contact, keep relevant bacteria codes. If doing freshwater as entero, keep relevant codes/   
+  if(type == "coast"){
+    
+    Coastal <- df %>%
+      filter(Bacteria_code %in%  c(1, 3),
+             Char_Name == "Enterococcus")
+  } else if (type == "freshwater") {
+    Coastal <- df %>%
+    filter(Bacteria_code %in%  c(4),
+           Char_Name == "Enterococcus")
+    
+  } else {
+    stop("Error- type must be 'coast' or 'freshwater'")
+  }
+
+  
+  
+if(length(unique(Coastal$AU_ID)) == 0) {
+  stop("No Enterococcus Data")
+} 
+
+# NON Watershed unit categorization -----------------------------------------------------------------------------------
+coast_contact_geomeans_no_WS <- Coastal %>%
+  filter(str_detect(AU_ID, "WS", negate = TRUE)) %>%
+  mutate(Geomean_Crit = 35,
+         SS_Crit = 130 ) %>%
+  group_by(AU_ID) %>%
+  arrange(SampleStartDate) %>%
+  dplyr::mutate(d = runner(x = data.frame(SampleStartDate  = SampleStartDate,
+                                          Result_cen = Result_cen,
+                                          Geomean_Crit = Geomean_Crit,
+                                          SS_Crit = SS_Crit),
+                           k = "90 days",
+                           lag = 0,
+                           idx = SampleStartDate,
+                           f = function(x) list(x)))%>%
+  dplyr::mutate(d = purrr::map(d, ~ .x %>%
+                                 dplyr::summarise(geomean = dplyr::case_when(n_distinct(SampleStartDate) >= 5 ~  geo_mean(Result_cen),
+                                                                             TRUE ~ NA_real_),
+                                                  count_90 = dplyr::n_distinct(SampleStartDate),
+                                                  dates_90 = stringr::str_c(unique(SampleStartDate),  collapse = "; "),
+                                                  date_range_90 = paste(min(SampleStartDate), "-", max(SampleStartDate)),
+                                                  geomean_excur = ifelse(!all(is.na(geomean)) & geomean > max(Geomean_Crit), 1, 0),
+                                                  #ss_excur_90 = ifelse(!is.na(Result_cen) & Result_cen > SS_Crit, 1, 0),
+                                                  ss_count_excur_90 = n_distinct(SampleStartDate[Result_cen > SS_Crit]),
+                                                  percent_excur_90 = ifelse(count_90 >= 5, n_distinct(SampleStartDate[Result_cen > SS_Crit])/ count_90, NA_real_) ,
+                                                  ss_excur_dates = case_when(ss_count_excur_90 > 0 ~ stringr::str_c(unique(SampleStartDate [Result_cen > SS_Crit]),  collapse = "; ") ,
+                                                                             ss_count_excur_90 == 0 ~ NA_character_) ,
+                                                  comment = dplyr::case_when(length(SampleStartDate) < 5 ~  'Not enough values to calculate geometric mean',
+                                                                             TRUE ~ NA_character_) 
+                                 )
+                               
+  )) %>%
+  tidyr::unnest_wider(d) %>%
+  arrange(AU_ID, SampleStartDate )  %>%
+  mutate(geomean_excursion = case_when(is.na(geomean) ~ "no: < 5 samples in 90 day period",
+                                       geomean >  Geomean_Crit ~ "yes",
+                                       TRUE ~ "no"),
+         single_sample_excursion = ifelse(Result_cen > SS_Crit, "yes", "no" ),
+         single_sample_90_day_above_10perc_excursion = case_when(is.na(percent_excur_90) ~ "no",
+                                                                 percent_excur_90 > 0.1 ~ "yes",
+                                                                 TRUE ~ "no" ))
+
+
+# Categorization --------------------------------------------------------------------------------------------------
+
+
+
+
+coast_AU_summary_no_WS0 <-  coast_contact_geomeans_no_WS %>%
+  filter(str_detect(AU_ID, "WS", negate = TRUE)) %>%
+  arrange(MLocID) %>%
+  ungroup() %>%
+  group_by(AU_ID,  Pollu_ID, wqstd_code ) %>%
+  summarise(num_Samples = as.numeric(n()),
+            Max_Geomean = ifelse(!all(is.na(geomean)),max(geomean, na.rm = TRUE),NA),
+            max.value  = max(Result_cen),
+            num_ss_excursions = as.numeric(sum(Result_cen > SS_Crit)),
+            max_ss_excursions_90_day = max(ss_count_excur_90, na.rm = TRUE),
+            max_ss_percent_excursion_90_day = ifelse(!all(is.na(percent_excur_90)),  
+                                                                round(max(percent_excur_90, na.rm = TRUE), 2), 
+                                                                NA_real_),
+            n_90day_percent_exceed = sum(percent_excur_90 > 0.10, na.rm = TRUE),
+            geomeans_calculated = sum(!is.na(geomean)),
+            geomean_excursions = ifelse(!is.na(Max_Geomean) &
+                                    Max_Geomean > max(Geomean_Crit), "yes", "no"),
+            n_geomean_excursions = sum(geomean_excur),
+            geomean_exceed_date_periods = case_when(geomean_excursions == "yes" ~ str_c(na.omit(unique(date_range_90[geomean > Geomean_Crit])), collapse = "; ")),
+            mlocs_geomean_exceed = ifelse(geomean_excursions == "yes", str_c(unique(na.omit(MLocID[geomean > Geomean_Crit]), collapse = "; ")),NA),
+            ss_exceed_date_periods = str_c(unique(SampleStartDate[Result_cen > SS_Crit]), collapse =  "; ")
+              ) %>%
+  mutate(IR_category = case_when(geomean_excursions == "yes" ~ "5",
+                                 max_ss_percent_excursion_90_day > 0.10 ~ "5",
+                                 geomeans_calculated == 0 & num_ss_excursions > 0 ~ "3B",
+                                 geomeans_calculated == 0 & num_ss_excursions == 0 ~ "3",
+                                 geomeans_calculated >= 1 & geomean_excursions == "no" & max_ss_percent_excursion_90_day <= 0.10 ~ '2',
+                                 TRUE ~ "ERROR"),
+         Rationale = case_when(geomean_excursions == "yes" ~ paste0(n_geomean_excursions, 
+                                                                    " geometric means exceed geomean criteria in time periods ",
+                                                                    geomean_exceed_date_periods),
+                               max_ss_percent_excursion_90_day > 0.10 ~ paste0(n_geomean_excursions, 
+                                                                               " geometric means exceed geomean criteria. Single sample exceedance rate > 10% ",
+                                                                               n_90day_percent_exceed, " times"),
+                               geomeans_calculated == 0 & num_ss_excursions > 0 ~ paste0("No 90 day period has at least 5 results. ", 
+                                                                                         num_ss_excursions, " single sample excursions"),
+                               geomeans_calculated == 0 & num_ss_excursions == 0 ~ paste0("No 90 day period has at least 5 results. ", 
+                                                                                          num_ss_excursions, " single sample excursions"),
+                               geomeans_calculated >= 1 & geomean_excursions == "no" & max_ss_percent_excursion_90_day <= 0.10 ~ "No excursions of geometric mean. No 90 day period > 10% single sample exceedance rate",
+                               TRUE ~ "ERROR"),
+         ) %>%
+  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code ),
+         period = NA_character_) |> 
+  mutate(Delist_eligability = case_when(num_Samples >= 18 & num_ss_excursions <= binomial_delisting(num_Samples, 'Conventionals') & IR_category == '2' ~ 1,
+                                        TRUE ~ 0)) |> 
+  mutate(period = NA_character_)
+
+coast_AU_summary_no_WS <-  join_prev_assessments(coast_AU_summary_no_WS0, AU_type = 'Other')
+
+if(type == 'freshwater'){
+  
+  coast_AU_summary_no_WS <- coast_AU_summary_no_WS |> 
+    filter(AU_ID %in% coast_contact_geomeans_no_WS$AU_ID)
+  
+}
+
+coast_AU_summary_no_WS_delist <- assess_delist(coast_AU_summary_no_WS, type = 'Other')
+
+
+
+
+
+# Watershed unit categorization -----------------------------------------------------------------------------------
+
+
+
+coast_contact_geomeans_WS <- Coastal %>%
+  filter(str_detect(AU_ID, "WS", negate = FALSE)) 
+
+if(nrow(coast_contact_geomeans_WS) > 0){
+  
+  coast_contact_geomeans_WS <- coast_contact_geomeans_WS |> 
+  mutate(Geomean_Crit = 35,
+         SS_Crit = 130 ) %>%
+  group_by(MLocID, AU_ID, AU_GNIS_Name) %>%
+  arrange(SampleStartDate) %>%
+  dplyr::mutate(d = runner(x = data.frame(SampleStartDate  = SampleStartDate,
+                                          Result_cen = Result_cen,
+                                          Geomean_Crit = Geomean_Crit,
+                                          SS_Crit = SS_Crit),
+                           k = "90 days",
+                           lag = 0,
+                           idx = SampleStartDate,
+                           f = function(x) list(x)))%>%
+  dplyr::mutate(d = purrr::map(d, ~ .x %>%
+                                 dplyr::summarise(geomean = dplyr::case_when(n_distinct(SampleStartDate) >= 5 ~  geo_mean(Result_cen),
+                                                                             TRUE ~ NA_real_),
+                                                  count_90 = dplyr::n_distinct(SampleStartDate),
+                                                  dates_90 = stringr::str_c(unique(SampleStartDate),  collapse = "; "),
+                                                  date_range_90 = paste(min(SampleStartDate), "-", max(SampleStartDate)),
+                                                  geomean_excur = ifelse(!all(is.na(geomean)) & geomean > max(Geomean_Crit), 1, 0),
+                                                  #ss_excur_90 = ifelse(!is.na(Result_cen) & Result_cen > SS_Crit, 1, 0),
+                                                  ss_count_excur_90 = n_distinct(SampleStartDate[Result_cen > SS_Crit]),
+                                                  percent_excur_90 = ifelse(count_90 >= 5, n_distinct(SampleStartDate[Result_cen > SS_Crit])/ count_90, NA_real_) ,
+                                                  ss_excur_dates = case_when(ss_count_excur_90 > 0 ~ stringr::str_c(unique(SampleStartDate [Result_cen > SS_Crit]),  collapse = "; ") ,
+                                                                             ss_count_excur_90 == 0 ~ NA_character_) ,
+                                                  comment = dplyr::case_when(length(SampleStartDate) < 5 ~  'Not enough values to calculate geometric mean',
+                                                                             TRUE ~ NA_character_) 
+                                 )
+                               
+  )) %>%
+  tidyr::unnest_wider(d) %>%
+  arrange(MLocID, SampleStartDate)  %>%
+  mutate(geomean_excursion = case_when(is.na(geomean) ~ "no: < 5 samples in 90 day period",
+                                       geomean >  Geomean_Crit ~ "yes",
+                                       TRUE ~ "no"),
+         single_sample_excursion = ifelse(Result_cen > SS_Crit, "yes", "no" ),
+         single_sample_90_day_above_10perc_excursion = case_when(is.na(percent_excur_90) ~ "no",
+                                                                 percent_excur_90 > 0.1 ~ "yes",
+                                                                 TRUE ~ "no" ))
+
+
+# Categorization --------------------------------------------------------------------------------------------------
+
+
+
+
+coast_AU_summary_WS0 <-  coast_contact_geomeans_WS %>%
+  filter(str_detect(AU_ID, "WS", negate = FALSE)) %>%
+  arrange(MLocID) %>%
+  ungroup() %>%
+  group_by(MLocID, AU_ID, AU_GNIS_Name, Pollu_ID, wqstd_code, OWRD_Basin ) %>%
+  summarise(num_Samples = as.numeric(n()),
+            Max_Geomean = ifelse(!all(is.na(geomean)),max(geomean, na.rm = TRUE),NA),
+            max.value  = max(Result_cen),
+            num_ss_excursions = as.numeric(sum(Result_cen > SS_Crit)),
+            max_ss_excursions_90_day = max(ss_count_excur_90, na.rm = TRUE),
+            max_ss_percent_excursion_90_day = ifelse(is.finite(max(percent_excur_90, na.rm = TRUE)),  
+                                                     round(max(percent_excur_90, na.rm = TRUE), 2), 
+                                                     NA_real_),
+            n_90day_percent_exceed = sum(percent_excur_90 > 0.10, na.rm = TRUE),
+            geomeans_calculated = sum(!is.na(geomean)),
+            geomean_excursions = ifelse(!is.na(Max_Geomean) &
+                                          Max_Geomean > max(Geomean_Crit), "yes", "no"),
+            n_geomean_excursions = sum(geomean_excur),
+            geomean_exceed_date_periods = case_when(geomean_excursions == "yes" ~ str_c(na.omit(unique(date_range_90[geomean > Geomean_Crit])), collapse = "; ")),
+            mlocs_geomean_exceed = ifelse(geomean_excursions == "yes", str_c(unique(na.omit(MLocID[geomean > Geomean_Crit]), collapse = "; ")),NA),
+            ss_exceed_date_periods = str_c(unique(SampleStartDate[Result_cen > SS_Crit]), collapse =  "; ")
+  ) %>%
+  mutate(IR_category = case_when(geomean_excursions == "yes" ~ "5",
+                                 max_ss_percent_excursion_90_day > 0.10 ~ "5",
+                                 geomeans_calculated == 0 & num_ss_excursions > 0 ~ "3B",
+                                 geomeans_calculated == 0 & num_ss_excursions == 0 ~ "3",
+                                 geomeans_calculated >= 1 & geomean_excursions == "no" & max_ss_percent_excursion_90_day <= 0.10 ~ '2',
+                                 TRUE ~ "ERROR"),
+         Rationale = case_when(geomean_excursions == "yes" ~ paste0("Impaired: ", n_geomean_excursions, 
+                                                                    " geometric means exceed geomean criteria in time periods ",
+                                                                    geomean_exceed_date_periods),
+                               max_ss_percent_excursion_90_day > 0.10 ~ paste0("Impaired: ", n_geomean_excursions, 
+                                                                               " geometric means exceed geomean criteria. Single sample exceedance rate > 10% ",
+                                                                               n_90day_percent_exceed, " times"),
+                               geomeans_calculated == 0 & num_ss_excursions > 0 ~ paste0("Insufficient data: ", "No 90 day period has at least 5 results. ", 
+                                                                                         num_ss_excursions, " single sample excursions"),
+                               geomeans_calculated == 0 & num_ss_excursions == 0 ~ paste0("Insufficient data: ","No 90 day period has at least 5 results. ", 
+                                                                                          num_ss_excursions, " single sample excursions"),
+                               geomeans_calculated >= 1 & geomean_excursions == "no" & max_ss_percent_excursion_90_day <= 0.10 ~ "Attaining: No excursions of geometric mean. No 90 day period > 10% single sample exceedance rate",
+                               TRUE ~ "ERROR"),
+  ) %>%
+  mutate(IR_category = factor(IR_category, levels=c("3", "3B", "2", "5" ), ordered=TRUE)) |> 
+  mutate(Delist_eligability = case_when(num_Samples >= 18 & num_ss_excursions <= binomial_delisting(num_Samples, 'Conventionals') & IR_category == '2' ~ 1,
+                                        TRUE ~ 0)) |> 
+  mutate(period = NA_character_)
+
+
+WS_GNIS_rollup <- coast_AU_summary_WS0 %>%
+  ungroup() %>%
+  group_by(AU_ID, AU_GNIS_Name, Pollu_ID, wqstd_code, period) %>%
+  summarise(IR_category_GNIS_24 = max(IR_category),
+            Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
+            Delist_eligability = max(Delist_eligability)) %>% 
+  mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
+                                        TRUE ~ 0)) |> 
+  mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', "3", "3B", "2", "5" ), ordered=TRUE)) |> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
+
+coast_AU_summary_WS <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")
+
+if(type == 'freshwater'){
+  
+  coast_AU_summary_WS <- coast_AU_summary_WS |> 
+    filter(AU_GNIS_Name %in% WS_GNIS_rollup$AU_GNIS_Name)
+  
+}
+
+
+WS_AU_rollup <- rollup_WS_AU(coast_AU_summary_WS)
+
+WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup)
+
+
+#end if statement
+} 
+
+
+if(write_excel){
+  
+  wb <- createWorkbook()
+  addWorksheet(wb, sheetName = "Coast Bacteria Data_WS")
+  addWorksheet(wb, sheetName = "WS station categorization")
+  addWorksheet(wb, sheetName = "WS AU categorization")
+  addWorksheet(wb, sheetName = "Coast Bacteria Data_Other")
+  addWorksheet(wb, sheetName = "Other AU categorization")
+  
+  header_st <- createStyle(textDecoration = "Bold", border = "Bottom")
+  #freezePane(wb, "Coast Bacteria Data_WS", firstRow = TRUE) 
+ # freezePane(wb, "WS station categorization", firstRow = TRUE)
+  #freezePane(wb, "WS AU categorization", firstRow = TRUE)
+  freezePane(wb,  "Coast Bacteria Data_Other", firstRow = TRUE)
+  freezePane(wb, "Other AU categorization", firstRow = TRUE)
+
+  
+  #writeData(wb = wb, sheet = "Coast Bacteria Data_WS", x = coast_contact_geomeans_WS, headerStyle = header_st)
+  #writeData(wb = wb, sheet = "WS station categorization", x = coast_AU_summary_WS, headerStyle = header_st)
+  #writeData(wb = wb, sheet = "WS AU categorization", x = WS_AU_rollup, headerStyle = header_st)
+  writeData(wb = wb, sheet =  "Coast Bacteria Data_Other", x = coast_contact_geomeans_no_WS, headerStyle = header_st)
+  writeData(wb = wb, sheet = "Other AU categorization", x = coast_AU_summary_no_WS, headerStyle = header_st )
+  
+  
+  print("Writing excel doc")
+  saveWorkbook(wb, "Parameters/Outputs/bacteria coast contact.xlsx", overwrite = TRUE) 
+  
+}
+
+
+
+bacteria_coast <-list(coast_bacteria_data_ws=as.data.frame(coast_contact_geomeans_WS),
+                      coast_bacteria_data_other=as.data.frame(coast_contact_geomeans_no_WS),
+                      ws_station_categorization=as.data.frame(coast_AU_summary_WS),
+                      ws_au_categorization=as.data.frame(WS_AU_rollup),
+                      other_au_categorization=as.data.frame(coast_AU_summary_no_WS))
+
+return(bacteria_coast)
+
+}
