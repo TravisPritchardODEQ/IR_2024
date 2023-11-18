@@ -9,15 +9,15 @@ Bacteria_data <- function(database) {
 
   print("Fetch bacteria data from IR database")
   #connect to IR database view as a general user
-  # import bacteria data
-  
-  IR.sql <-   odbcConnect(database)
+  # import Temperature data
+  IR.sql <-  DBI::dbConnect(odbc::odbc(), database)
   
 
-  Results_import <-    sqlFetch(IR.sql, "dbo.VW_Bacteria") 
+  Results_import <- DBI::dbReadTable(IR.sql, "VW_Bacteria") 
+
+
+  DBI::dbDisconnect(IR.sql)
   
-  
-  odbcClose(IR.sql)
   
   print(paste("Fetched", nrow(Results_import), "results from", length(unique(Results_import$MLocID)), "monitoring locations" ))
   

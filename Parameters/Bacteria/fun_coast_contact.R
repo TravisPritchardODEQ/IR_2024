@@ -271,6 +271,7 @@ if(type == 'freshwater'){
   
 }
 
+WS_GNIS_rollup_delist <- assess_delist(coast_AU_summary_WS, type = 'WS')
 
 WS_AU_rollup <- rollup_WS_AU(coast_AU_summary_WS)
 
@@ -312,11 +313,20 @@ if(write_excel){
 
 
 
-bacteria_coast <-list(coast_bacteria_data_ws=as.data.frame(coast_contact_geomeans_WS),
-                      coast_bacteria_data_other=as.data.frame(coast_contact_geomeans_no_WS),
-                      ws_station_categorization=as.data.frame(coast_AU_summary_WS),
-                      ws_au_categorization=as.data.frame(WS_AU_rollup),
-                      other_au_categorization=as.data.frame(coast_AU_summary_no_WS))
+
+bacteria_coast <-list(coast_bacteria_data_other=as.data.frame(coast_contact_geomeans_no_WS),
+                      other_au_categorization=as.data.frame(coast_AU_summary_no_WS_delist))
+
+
+if(nrow(coast_contact_geomeans_WS) > 0){
+bacteria_coast_ws <- list(coast_bacteria_data_ws=as.data.frame(coast_contact_geomeans_WS),
+                          ws_station_categorization=as.data.frame(coast_AU_summary_WS0),
+                          ws_GNIS_categorization = as.data.frame(WS_GNIS_rollup_delist),
+                          ws_au_categorization=as.data.frame(WS_AU_rollup_joined))
+
+bacteria_coast <- c(bacteria_coast, bacteria_coast_ws)             
+
+}
 
 return(bacteria_coast)
 
