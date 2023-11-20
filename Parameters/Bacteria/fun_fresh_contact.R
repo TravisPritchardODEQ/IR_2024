@@ -320,43 +320,49 @@ AU_display_ws_entero <- entero_ws_AU_cat |>
 
 
 
-AU_display <- bind_rows(AU_display_other, AU_display_other_entero, AU_display_ws, AU_display_ws_entero)
+AU_display <- bind_rows(AU_display_other, AU_display_other_entero, AU_display_ws, AU_display_ws_entero) |> 
+  mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
+                               .default = Rationale))
 
 
 
 # Create excel doc ------------------------------------------------------------------------------------------------
 if(write_excel){
 
+  
+  
+  
+  
 wb <- createWorkbook()
-addWorksheet(wb, sheetName = "AU_categorization")
+addWorksheet(wb, sheetName = "AU_Decisions", tabColour = 'forestgreen')
 
 
-addWorksheet(wb, sheetName = "Other_AU_assess_info")
-addWorksheet(wb, sheetName = "Other_AU_assess_info_entero")
+addWorksheet(wb, sheetName = "Other_AU_categorization",tabColour = 'dodgerblue3')
+addWorksheet(wb, sheetName = "Other_AU_categorization_entero",tabColour = 'dodgerblue3')
 
-addWorksheet(wb, sheetName = "WS station categorization")
-addWorksheet(wb, sheetName = "WS station cat_entero")
+addWorksheet(wb, sheetName = "WS station categorization", tabColour = 'lightblue3')
+addWorksheet(wb, sheetName = "WS station cat_entero", tabColour = 'lightblue3')
 
-addWorksheet(wb, sheetName = "WS GNIS rollup")
-addWorksheet(wb, sheetName = "WS GNIS rollup_entero")
+addWorksheet(wb, sheetName = "WS GNIS categorization", tabColour = 'lightyellow1')
+addWorksheet(wb, sheetName = "WS GNIS categorization_entero", tabColour = 'lightyellow1')
 
-addWorksheet(wb, sheetName = "Fresh Bacteria Data")
-addWorksheet(wb, sheetName = "Fresh Entero Bact Data_other")
-addWorksheet(wb, sheetName = "Fresh Entero Bact Data_WS")
+addWorksheet(wb, sheetName = "Fresh Bacteria Data", tabColour = 'paleturquoise2')
+addWorksheet(wb, sheetName = "Fresh Entero Bact Data_other", tabColour = 'paleturquoise2')
+addWorksheet(wb, sheetName = "Fresh Entero Bact Data_WS", tabColour = 'paleturquoise2')
 
 
 header_st <- createStyle(textDecoration = "Bold", border = "Bottom")
 
-writeData(wb = wb, sheet = "AU_categorization", x = AU_display, headerStyle = header_st)
+writeData(wb = wb, sheet = "AU_Decisions", x = AU_display, headerStyle = header_st)
 
-writeData(wb = wb, sheet = "Other_AU_assess_info", x = fresh_AU_summary_no_WS_delist, headerStyle = header_st)
-writeData(wb = wb, sheet = "Other_AU_assess_info_entero", x = entero_other_AU_cat, headerStyle = header_st)
+writeData(wb = wb, sheet = "Other_AU_categorization", x = fresh_AU_summary_no_WS_delist, headerStyle = header_st)
+writeData(wb = wb, sheet = "Other_AU_categorization_entero", x = entero_other_AU_cat, headerStyle = header_st)
 
 writeData(wb = wb, sheet = "WS station categorization", x = fresh_AU_summary_WS0, headerStyle = header_st)
 writeData(wb = wb, sheet = "WS station cat_entero", x = entero_ws_MLOC_cat, headerStyle = header_st)
 
-writeData(wb = wb, sheet = "WS GNIS rollup", x = WS_GNIS_rollup_delist, headerStyle = header_st)
-writeData(wb = wb, sheet = "WS GNIS rollup_entero", x = entero_ws_GNIS_cat, headerStyle = header_st)
+writeData(wb = wb, sheet = "WS GNIS categorization", x = WS_GNIS_rollup_delist, headerStyle = header_st)
+writeData(wb = wb, sheet = "WS GNIS categorization_entero", x = entero_ws_GNIS_cat, headerStyle = header_st)
 
 writeData(wb = wb, sheet = "Fresh Bacteria Data", x = fresh_contact_geomeans, headerStyle = header_st)
 writeData(wb = wb, sheet = "Fresh Entero Bact Data_other", x = entero_other_data, headerStyle = header_st)
