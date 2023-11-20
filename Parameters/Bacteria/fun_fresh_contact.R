@@ -205,9 +205,34 @@ WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup)
 
 # Non- watershed unit categorization ---------------------------------------------------------------------------------------------------
 
+fresh_contact_geomeans_other <- fresh_contact %>%
+  filter(Char_Name == "Escherichia coli") |> 
+  group_by(AU_ID) %>%
+  arrange(SampleStartDate) %>%
+  dplyr::mutate(d = runner(x = data.frame(SampleStartDate  = SampleStartDate,
+                                          Result_cen = Result_cen),
+                           k = "90 days",
+                           lag = 0,
+                           idx = SampleStartDate,
+                           f = function(x) list(x))) %>%
+  dplyr::mutate(d = purrr::map(d, ~ .x %>%
+                                 dplyr::summarise(geomean = dplyr::case_when(length(SampleStartDate) >= 5 ~  geo_mean(Result_cen),
+                                                                             TRUE ~ NA_real_),
+                                                  count_90 = dplyr::n_distinct(SampleStartDate),
+                                                  dates_90 = stringr::str_c(unique(SampleStartDate),  collapse = "; "),
+                                                  comment = dplyr::case_when(length(SampleStartDate) < 5 ~  'Not enough values to calculate geometric mean',
+                                                                             TRUE ~ NA_character_) )
+  )) %>%
+  tidyr::unnest_wider(d) %>%
+  arrange(AU_ID, MLocID, SampleStartDate )  %>%
+  mutate(geomean_excursion = case_when(is.na(geomean) ~ "no: < 5 samples in 90 day period",
+                                       geomean >  Geomean_Crit ~ "yes",
+                                       TRUE ~ "no"),
+         single_sample_excursion = ifelse(Result_cen > SS_Crit, "yes", "no" ))
 
 
-fresh_AU_summary_no_WS0 <-  fresh_contact_geomeans %>%
+
+fresh_AU_summary_no_WS0 <-  fresh_contact_geomeans_other %>%
   filter(!str_detect(AU_ID, "WS")) %>%
   ungroup() %>%
   group_by(AU_ID, Pollu_ID, wqstd_code ) %>%
@@ -223,7 +248,7 @@ fresh_AU_summary_no_WS0 <-  fresh_contact_geomeans %>%
             mlocs_ss_exceed = str_c(unique(MLocID[Result_cen > SS_Crit]), collapse = "; "),
             geomean_over = ifelse(!is.na(Max_Geomean) &
                                     Max_Geomean > Geomean_Crit, 1, 0),
-            mlocs_geomean_exceed = ifelse(geomean_over == 1, str_c(unique(na.omit(MLocID[geomean > Geomean_Crit]), collapse = "; ")),NA),
+            #mlocs_geomean_exceed = ifelse(geomean_over == 1, str_c(unique(na.omit(MLocID[geomean > Geomean_Crit]), collapse = "; ")),NA),
             geomean_exceed_date_periods = ifelse(geomean_over == 1 ,str_c(na.omit(unique(dates_90[geomean > Geomean_Crit]), collapse = "; ")),NA),
             ss_exceed_date_periods = str_c(unique(SampleStartDate[Result_cen > SS_Crit]), collapse =  "; ")) %>%
   mutate(IR_category = case_when(geomean_over == 1 ~ "5",
@@ -233,7 +258,7 @@ fresh_AU_summary_no_WS0 <-  fresh_contact_geomeans %>%
                                  !is.na(Max_Geomean) & Max_Geomean <= Geomean_Crit ~ "2",
                                  is.na(Max_Geomean) & num_Samples >= 5 & num_ss_excursions < critical_excursions ~ "2",
                                  TRUE ~ "ERROR"),
-         Rationale = case_when(geomean_over == 1 ~ paste0("Impaired: Geomeans at ", mlocs_geomean_exceed, " exceed criteria value of ", Geomean_Crit, " for time periods ",geomean_exceed_date_periods, "- ",num_Samples, " total samples"  ),
+         Rationale = case_when(geomean_over == 1 ~ paste0("Impaired: Geomean exceed criteria value of ", Geomean_Crit, " for time periods ",geomean_exceed_date_periods, "- ",num_Samples, " total samples"  ),
                                num_Samples >= 5 & num_ss_excursions > critical_excursions ~  paste0("Impaired: Single samples exceed criteria value of ",
                                                                                                    SS_Crit, " ", num_ss_excursions, ' times on ', 
                                                                                                    ss_exceed_date_periods, " at ", mlocs_ss_exceed,   "- ",num_Samples, " total samples" ),
