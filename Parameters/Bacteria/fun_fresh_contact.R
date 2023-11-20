@@ -379,10 +379,16 @@ saveWorkbook(wb, "Parameters/Outputs/bacteria freshwater contact.xlsx", overwrit
 # Function output list --------------------------------------------------------------------------------------------
 
 
-bacteria_freshwater <-list(fresh_bacteria_data=as.data.frame(fresh_contact_geomeans),
-                           ws_station_categorization=as.data.frame(fresh_AU_summary_WS),
-                           ws_au_categorization=as.data.frame(WS_AU_rollup),
-                           other_au_categorization=as.data.frame(fresh_AU_summary_no_WS))
+bacteria_freshwater <-list(AU_Decisions=as.data.frame(AU_display),
+                           Other_AU_categorization=as.data.frame(fresh_AU_summary_no_WS_delist),
+                           WS_station_categorization=as.data.frame(fresh_AU_summary_WS0),
+                           WS_station_cat_entero=as.data.frame(entero_ws_MLOC_cat),
+                           WS_GNIS_categorization = as.data.frame(WS_GNIS_rollup_delist),
+                           WS_GNIS_categorization_entero = as.data.frame(entero_ws_GNIS_cat),
+                           Fresh_Bacteria_Data =as.data.frame( fresh_contact_geomeans),
+                           Fresh_Entero_Bact_Data_other = as.data.frame(entero_other_data),
+                           Fresh_Entero_Bact_Data_WS =as.data.frame( entero_ws_data)
+                           )
 
 return(bacteria_freshwater)
 }
