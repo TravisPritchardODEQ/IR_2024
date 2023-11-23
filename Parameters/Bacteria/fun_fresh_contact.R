@@ -371,7 +371,8 @@ addWorksheet(wb, sheetName = "WS station cat_entero", tabColour = 'lightblue3')
 addWorksheet(wb, sheetName = "WS GNIS categorization", tabColour = 'lightyellow1')
 addWorksheet(wb, sheetName = "WS GNIS categorization_entero", tabColour = 'lightyellow1')
 
-addWorksheet(wb, sheetName = "Fresh Bacteria Data", tabColour = 'paleturquoise2')
+addWorksheet(wb, sheetName = "Fresh Bacteria Data_WS", tabColour = 'paleturquoise2')
+addWorksheet(wb, sheetName = "Fresh Bacteria Data_other", tabColour = 'paleturquoise2')
 addWorksheet(wb, sheetName = "Fresh Entero Bact Data_other", tabColour = 'paleturquoise2')
 addWorksheet(wb, sheetName = "Fresh Entero Bact Data_WS", tabColour = 'paleturquoise2')
 
@@ -389,13 +390,14 @@ writeData(wb = wb, sheet = "WS station cat_entero", x = entero_ws_MLOC_cat, head
 writeData(wb = wb, sheet = "WS GNIS categorization", x = WS_GNIS_rollup_delist, headerStyle = header_st)
 writeData(wb = wb, sheet = "WS GNIS categorization_entero", x = entero_ws_GNIS_cat, headerStyle = header_st)
 
-writeData(wb = wb, sheet = "Fresh Bacteria Data", x = fresh_contact_geomeans, headerStyle = header_st)
+writeData(wb = wb, sheet = "Fresh Bacteria Data_WS", x = fresh_contact_geomeans, headerStyle = header_st)
+writeData(wb = wb, sheet = "Fresh Bacteria Data_other", x = fresh_contact_geomeans_other, headerStyle = header_st)
 writeData(wb = wb, sheet = "Fresh Entero Bact Data_other", x = entero_other_data, headerStyle = header_st)
 writeData(wb = wb, sheet = "Fresh Entero Bact Data_WS", x = entero_ws_data, headerStyle = header_st)
 
 
 print("Writing excel doc")
-saveWorkbook(wb, "Parameters/Outputs/bacteria freshwater contact.xlsx", overwrite = TRUE) 
+saveWorkbook(wb, paste0("Parameters/Outputs/bacteria_freshwater_contact-",Sys.Date(), ".xlsx"), overwrite = TRUE) 
 
 }
 

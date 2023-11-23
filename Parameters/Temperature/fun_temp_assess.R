@@ -296,7 +296,9 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
                                      prev_category == '2' & final_AU_cat  %in% c('5','4A','4B', '4C') ~ "Attain to Impaired",
                                      prev_category %in% c('3D','3','3B', '3C') & final_AU_cat %in% c('5','4A','4B', '4C') ~ "Insufficient to Impaired",
                                      prev_category %in% c('3D','3','3B', '3C') & final_AU_cat %in% c('2') ~ "Insufficient to Attain"
-    ))
+    ))|> 
+    mutate(year_last_assessed = case_when(status_change != 'No change in status- No New Assessment' ~"2024",
+                                          TRUE ~ year_last_assessed))
   
   
   
@@ -676,42 +678,108 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
   
   
 
+
+# prep for export -------------------------------------------------------------------------------------------------
+
+
+## pull together AU decisions --------------------------------------------------------------------------------------
+
+  
+  
+  AU_display_other_yearround <- temp_IR_categories_other_delist |> 
+    select(AU_ID, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+           final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)  
+  
+  
+  AU_display_WS_yearround <- WS_AU_rollup_joined |> 
+    rename(prev_category = prev_AU_category,
+           prev_rationale = prev_AU_rationale,
+           final_AU_cat = IR_category_AU_24,
+           Rationale = Rationale_AU) |> 
+    select(AU_ID, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+           final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+  
+  AU_display_other_spawn <- temp_IR_categories_other_spawn_delist|> 
+    select(AU_ID, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+           final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)  
   
   
   
+  AU_display_WS_spawnd <- WS_AU_rollup_joined_spawn |> 
+    rename(prev_category = prev_AU_category,
+           prev_rationale = prev_AU_rationale,
+           final_AU_cat = IR_category_AU_24,
+           Rationale = Rationale_AU) |> 
+    select(AU_ID, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+           final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+  AU_display <- bind_rows(AU_display_other_yearround,AU_display_WS_yearround,  AU_display_other_spawn, AU_display_WS_spawnd)
+  
+  
+
+## Pull together Other_AU_categorization decisions ------------------------------------------------------------------------------------
+  Other_AU_categorization <- bind_rows(temp_IR_categories_other_delist, temp_IR_categories_other_spawn_delist) |> 
+    relocate(max_3yr_results_in_spawn_period, .after = max_3yr_results_in_crit_period) |> 
+    relocate(distinct_years_sufficient_spawn_period, .after = distinct_years_sufficient_crit_period) |> 
+    relocate(spawn_period_length, .after = distinct_years)
+
+## mloc categorization ---------------------------------------------------------------------------------------------
+  temp_IR_categories_WS0 <- temp_IR_categories_WS |> 
+    mutate(IR_category = as.character(IR_category))
+  
+  temp_IR_categories_WS_spawn0 <- temp_IR_categories_WS_spawn |> 
+    mutate(IR_category = as.character(IR_category))
+  
+  WS_station_cat <- bind_rows(temp_IR_categories_WS0,temp_IR_categories_WS_spawn0 ) |> 
+    relocate(max_3yr_results_in_spawn_period, .after = max_3yr_results_in_crit_period) |> 
+    relocate(distinct_years_sufficient_spawn_period, .after = distinct_years_sufficient_crit_period) |> 
+    relocate(spawn_period_length, .after = distinct_years) |> 
+    relocate(distinct_years_sufficient_spawn_period_delist, .after = distinct_years_sufficient_spawn_period) |> 
+    arrange(MLocID)
+  
+
+# GNIS categorization ---------------------------------------------------------------------------------------------
+
+WS_GNIS_cat <- bind_rows(WS_GNIS_rollup_delist, WS_GNIS_rollup_delist_spawn)
+  
+  
+  
+  
+    
+
   if(write_excel){
     
     wb <- createWorkbook()
-    addWorksheet(wb, sheetName = "Temperature Data")
-    addWorksheet(wb, sheetName = "YrRnd WS MLOC cat")
-    addWorksheet(wb, sheetName = "YrRnd WS GNIS cat")
-    addWorksheet(wb, sheetName = "YrRnd WS AU cat")
-    addWorksheet(wb, sheetName = "YrRnd Other AU cat")
-    addWorksheet(wb, sheetName = "Spawn WS MLOC cat")
-    addWorksheet(wb, sheetName = "Spawn WS GNIS cat")
-    addWorksheet(wb, sheetName = "Spawn WS AU cat")
-    addWorksheet(wb, sheetName = "Spawn Other AU cat")
+    addWorksheet(wb, sheetName = "AU_Decisions", tabColour = 'forestgreen')
+    
+    
+    addWorksheet(wb, sheetName = "Other_AU_categorization",tabColour = 'dodgerblue3')
+    
+    
+    addWorksheet(wb, sheetName = "WS_station_categorization", tabColour = 'lightblue3')
+  
+    
+    addWorksheet(wb, sheetName = "WS_GNIS_categorization", tabColour = 'lightyellow1')
+    
+    
+    addWorksheet(wb, sheetName = "Temperature_Data", tabColour = 'paleturquoise2')
+
+    
+    
     
     header_st <- createStyle(textDecoration = "Bold", border = "Bottom")
-    freezePane(wb, "Temperature Data", firstRow = TRUE) 
-    freezePane(wb, "YrRnd WS MLOC cat", firstRow = TRUE) 
-    freezePane(wb, "YrRnd WS GNIS cat", firstRow = TRUE)
-    freezePane(wb, "YrRnd WS AU cat", firstRow = TRUE)
-    freezePane(wb, "YrRnd Other AU cat", firstRow = TRUE)
-    freezePane(wb, "Spawn WS MLOC cat", firstRow = TRUE)
-    freezePane(wb, "Spawn WS GNIS cat", firstRow = TRUE)
-    freezePane(wb, "Spawn WS AU cat", firstRow = TRUE)
-    freezePane(wb, "Spawn WS AU cat", firstRow = TRUE)
+    freezePane(wb, "AU_Decisions", firstRow = TRUE) 
+    freezePane(wb, "Other_AU_categorization", firstRow = TRUE) 
+    freezePane(wb, "WS_station_categorization", firstRow = TRUE)
+    freezePane(wb, "WS_GNIS_categorization", firstRow = TRUE)
+    freezePane(wb, "Temperature_Data", firstRow = TRUE)
+ 
     
-    writeData(wb = wb, sheet = "Temperature Data", x = temp_air_exclusion, headerStyle = header_st)
-    writeData(wb = wb, sheet = "YrRnd WS MLOC cat", x = temp_IR_categories_WS, headerStyle = header_st)
-    writeData(wb = wb, sheet = "YrRnd WS GNIS cat", x = WS_GNIS_rollup_delist, headerStyle = header_st)
-    writeData(wb = wb, sheet = "YrRnd WS AU cat", x = WS_AU_rollup_joined , headerStyle = header_st)
-    writeData(wb = wb, sheet = "YrRnd Other AU cat", x = temp_IR_categories_other_delist, headerStyle = header_st )
-    writeData(wb = wb, sheet = "Spawn WS MLOC cat", x = temp_IR_categories_WS_spawn, headerStyle = header_st )
-    writeData(wb = wb, sheet = "Spawn WS GNIS cat", x = WS_AU_rollup_joined_spawn , headerStyle = header_st )
-    writeData(wb = wb, sheet = "Spawn WS AU cat", x = WS_AU_rollup_spawn, headerStyle = header_st )
-    writeData(wb = wb, sheet = "Spawn Other AU cat", x = temp_IR_categories_other_delist, headerStyle = header_st )
+    writeData(wb = wb, sheet = "AU_Decisions", x = AU_display, headerStyle = header_st)
+    writeData(wb = wb, sheet = "Other_AU_categorization", x = Other_AU_categorization, headerStyle = header_st)
+    writeData(wb = wb, sheet = "WS_station_categorization", x = WS_station_cat, headerStyle = header_st)
+    writeData(wb = wb, sheet = "WS_GNIS_categorization", x = WS_GNIS_cat , headerStyle = header_st)
+    writeData(wb = wb, sheet = "Temperature_Data", x = temp_air_exclusion, headerStyle = header_st )
+    
     
     print("Writing excel doc")
     saveWorkbook(wb, paste0("Parameters/Outputs/temperature-",Sys.Date(), ".xlsx"), overwrite = TRUE) 
@@ -719,13 +787,14 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
   }
   
   
-  # temperature <-list(temperature=as.data.frame(temp_air_exclusion),
-  #                    year_round_ws_station_categorization=as.data.frame(temp_IR_categories_WS),
-  #                    year_round_ws_au_categorization=as.data.frame(WS_AU_rollup),
-  #                    year_round_other_au_categorization=as.data.frame(temp_IR_categories_other),
-  #                    spawn_ws_station_categorization=as.data.frame(temp_IR_categories_WS_spawn),
-  #                    spawn_ws_au_categorization=as.data.frame(WS_AU_rollup_spawn),
-  #                    spawn_other_au_categorization=as.data.frame(temp_IR_categories_other_spawn))
-  # 
-  # return(temperature)
+  temperature <- list(AU_Decisions=as.data.frame(AU_display),
+                      Other_AU_categorization=as.data.frame(Other_AU_categorization),
+                      WS_station_categorization=as.data.frame(WS_station_cat),
+                      WS_GNIS_categorization = as.data.frame(WS_GNIS_cat),
+                      Temperature_Data =as.data.frame( temp_air_exclusion)
+                      
+  )
+  
+
+  return(temperature)
 }
