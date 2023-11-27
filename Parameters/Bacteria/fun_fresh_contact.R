@@ -12,7 +12,12 @@ fresh_contact_rec <- function(df, write_excel = TRUE){
   #write_excel = TRUE  
 library(runner)
 library(openxlsx)
+  
+  
 
+# Initial Filtering -----------------------------------------------------------------------------------------------
+
+  
 fresh_contact <- df %>%
   filter(Bacteria_code %in% c(2, 4)) |> 
   filter(case_when(Bacteria_code == 2 ~ Char_Name == "Escherichia coli",
@@ -82,7 +87,7 @@ fresh_contact_geomeans <- fresh_contact %>%
 # Categorization --------------------------------------------------------------------------------------------------
 
 
-# Watershed unit categorization -----------------------------------------------------------------------------------
+## Watershed unit categorization -----------------------------------------------------------------------------------
 
 
 fresh_AU_summary_WS0 <-  fresh_contact_geomeans %>%
@@ -135,6 +140,10 @@ fresh_AU_summary_WS0 <-  fresh_contact_geomeans %>%
   select(-geomean_over, -geomean_exceed_date_periods, -ss_exceed_date_periods) |> 
   mutate(period = NA_character_)
 
+
+### WS GNIS Rollup --------------------------------------------------------------------------------------------------
+
+
 WS_GNIS_rollup <- fresh_AU_summary_WS0 %>%
   ungroup() %>%
   group_by(AU_ID, AU_GNIS_Name, Pollu_ID, wqstd_code, period) %>%
@@ -168,7 +177,7 @@ WS_GNIS_rollup_1 <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")
 WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup_1, type = 'WS')
 
 
-# WS AU rollup ----------------------------------------------------------------------------------------------------
+### WS AU rollup ----------------------------------------------------------------------------------------------------
 
 # WS_AU_rollup <- WS_GNIS_rollup_delist %>%
 #   ungroup() %>%
@@ -203,7 +212,7 @@ WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup_delist)
 
 WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup)
 
-# Non- watershed unit categorization ---------------------------------------------------------------------------------------------------
+## Non- watershed unit categorization ---------------------------------------------------------------------------------------------------
 
 fresh_contact_geomeans_other <- fresh_contact %>%
   filter(Char_Name == "Escherichia coli") |> 

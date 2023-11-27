@@ -10,7 +10,7 @@ Shell_Harvest <- function(df, write_excel = TRUE) {
   
   print("Begin shellfish harvesting analysis")
   ########################################
-  # Test data set did not have any bact code 3 fecal data. Cnage code to 3 when run full analysis
+  # Test data set did not have any bact code 3 fecal data. Change code to 3 when run full analysis
   #########################################
   
   
