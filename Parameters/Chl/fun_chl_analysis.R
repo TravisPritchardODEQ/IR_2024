@@ -1,10 +1,10 @@
 
 
 
-chl_assessment <- function(df, write_excel = TRUE){
+chl_assessment <- function(df, write_excel = TRUE, database = 'IR_Dev'){
 
  # df <- Results_censored_chla
-
+#  database = 'IR_Dev'
 
 
   library(tidyverse)
@@ -14,6 +14,18 @@ chl_assessment <- function(df, write_excel = TRUE){
   library(openxlsx)
   library(odeqIRtools)
 
+  
+
+# Char rename -----------------------------------------------------------------------------------------------------
+  con <- DBI::dbConnect(odbc::odbc(), database)
+  
+  chars <- tbl(con, "LU_Pollutant") |> 
+    select(Pollu_ID, `Pollutant_DEQ WQS`) |> 
+    rename(Char_Name = `Pollutant_DEQ WQS`) |>
+    mutate(Pollu_ID = as.character(Pollu_ID)) |> 
+    collect()
+  
+    DBI::dbDisconnect(con)
   # Watershed units -------------------------------------------------------------------------------------------------
 
 
@@ -24,13 +36,13 @@ chl_assessment <- function(df, write_excel = TRUE){
 chla_data_month_ws <- df %>%
   filter(str_detect(AU_ID, "WS", negate = FALSE)) %>%
   mutate(yearmon = lubridate::floor_date(lubridate::as_date(SampleStartDate), "month")) %>%
-  group_by(AU_ID, MLocID, AU_GNIS_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  yearmon, Chla_Criteria) %>%
+  group_by(AU_ID, MLocID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  yearmon, Chla_Criteria) %>%
   summarise(month_average = mean(Result_cen, na.rm = TRUE),
             month_n = n() ) %>%
   ungroup()
 
 WS_3mo <- chla_data_month_ws %>%
-  group_by(AU_ID, MLocID, AU_GNIS_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, yearmon) %>%
+  group_by(AU_ID, MLocID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, yearmon) %>%
   dplyr::mutate(d = runner(x = data.frame(yearmon  = yearmon,
                                           month_average = month_average,
                                           month = as.yearmon(yearmon, "%m/%Y")),
@@ -51,13 +63,13 @@ WS_3mo <- chla_data_month_ws %>%
 
 
 WS_category <- WS_3mo %>%
-  group_by(AU_ID, MLocID, AU_GNIS_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, yearmon) %>%
+  group_by(AU_ID, MLocID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, yearmon) %>%
   mutate(month = as.yearmon(yearmon, "%m/%Y"),
          avg_3mo_excursion = case_when(is.na(avg_3mo) ~ 0,
                                       avg_3mo > Chla_Criteria ~ 1,
                                       TRUE ~ 0 ),
          num_month_avg = n()) %>%
-  group_by(AU_ID, MLocID, AU_GNIS_Name, Pollu_ID, wqstd_code,  OWRD_Basin) %>%
+  group_by(AU_ID, MLocID, AU_GNIS_Name, Char_Name,  Pollu_ID, wqstd_code,  OWRD_Basin) %>%
   summarise(total_n = sum(month_n),
             num_monthly_avg = n_distinct(yearmon),
             num_3mo_avg_calculated = sum(!is.na(avg_3mo)),
@@ -115,14 +127,16 @@ WS_category <- WS_3mo %>%
 
 WS_GNIS_rollup <- WS_category %>%
   ungroup() %>%
-  group_by(AU_ID, AU_GNIS_Name, Pollu_ID, wqstd_code, period) %>%
+  group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
   summarise(IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
   mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
                                         TRUE ~ 0)) |> 
   mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', "3", "3B", "2", "5" ), ordered=TRUE)) |> 
-  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  |> 
+  ungroup() |> 
+  select(-Char_Name)
 
 WS_GNIS_rollup <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")
 
@@ -130,15 +144,22 @@ WS_GNIS_rollup <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")
 ### Delist process --------------------------------------------------------------------------------------------------
 
 
-WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')
+WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS') |> 
+  left_join(chars, by = join_by(Pollu_ID)) |> 
+  relocate(Char_Name, .after = AU_GNIS_Name)
 
 
 ## AU Rollup -------------------------------------------------------------------------------------------------------
 
 
-WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup)
+WS_AU_rollup <-  rollup_WS_AU(WS_GNIS_rollup_delist, char_name_field = Char_Name)
 
 
+WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup) |> 
+  ungroup() |> 
+  select(-Char_Name) |> 
+  left_join(chars, by = join_by(Pollu_ID)) |> 
+  relocate(Char_Name, .after = AU_ID)
 # Other AUs -------------------------------------------------------------------------------------------------------
 
 
@@ -147,13 +168,13 @@ WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup)
 chla_data_month_other <- df %>%
   filter(str_detect(AU_ID, "WS", negate = TRUE)) %>%
   mutate(yearmon = lubridate::floor_date(lubridate::as_date(SampleStartDate), "month")) %>%
-  group_by(AU_ID, Pollu_ID, wqstd_code,  OWRD_Basin,  yearmon, Chla_Criteria) %>%
+  group_by(AU_ID, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  yearmon, Chla_Criteria) %>%
   summarise(month_average = mean(Result_cen, na.rm = TRUE),
             month_n = n() ) %>%
   ungroup()
 
 other_3mo <- chla_data_month_other %>%
-  group_by(AU_ID, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, month_n) %>%
+  group_by(AU_ID, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, month_n) %>%
   dplyr::mutate(d = runner(x = data.frame(yearmon  = yearmon,
                                           month_average = month_average,
                                           month = as.yearmon(yearmon, "%m/%Y")),
@@ -179,7 +200,7 @@ other_category <- other_3mo %>%
                                        avg_3mo > Chla_Criteria ~ 1,
                                        TRUE ~ 0 ),
          num_month_avg = n()) %>%
-  group_by(AU_ID,  Pollu_ID, wqstd_code,  OWRD_Basin) %>%
+  group_by(AU_ID,  Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin) %>%
   summarise(total_n = sum(month_n),
             num_monthly_avg = n_distinct(yearmon),
             num_3mo_avg_calculated = sum(!is.na(avg_3mo)),
@@ -231,19 +252,22 @@ other_category <- other_3mo %>%
                                         & num_3mo_avg_calculated > 1 & num_excur_3mo_avg == 0  ~ 1,
                                         TRUE ~ 0)) 
 
-other_category <- join_prev_assessments(other_category, AU_type = 'Other')
+other_category <- join_prev_assessments(other_category, AU_type = 'Other') |> 
+  select(-Char_Name)
 
-other_category_delist <-  assess_delist(other_category, type = "Other")
+other_category_delist <-  assess_delist(other_category, type = "Other")|> 
+  left_join(chars, by = join_by(Pollu_ID)) |> 
+  relocate(Char_Name, .after = AU_ID)
 
 
 
 # prep data for export --------------------------------------------------------------------------------------------
 
 AU_display_other <- other_category_delist |> 
-  select(AU_ID, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+  select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
          final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
 
-AU_display_ws <- WS_AU_rollup |> 
+AU_display_ws <- WS_AU_rollup_joined |> 
   rename(prev_category = prev_AU_category,
          prev_rationale = prev_AU_rationale,
          final_AU_cat = IR_category_AU_24,
@@ -266,6 +290,8 @@ if(write_excel){
   
   chla_data_month_other <- chla_data_month_other %>%
     mutate(yearmon = as.yearmon(yearmon, "%m/%Y"))
+  
+  
   
   
   wb <- createWorkbook()

@@ -94,7 +94,7 @@ fresh_AU_summary_WS0 <-  fresh_contact_geomeans %>%
   filter(str_detect(AU_ID, "WS", negate = FALSE)) %>%
   arrange(MLocID) %>%
   ungroup() %>%
-  group_by(AU_ID, MLocID, AU_GNIS_Name, Pollu_ID, wqstd_code ) %>%
+  group_by(AU_ID, MLocID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code ) %>%
   summarise(OWRD_Basin = first(OWRD_Basin), 
             Max_Geomean = ifelse(!all(is.na(geomean)),max(geomean, na.rm = TRUE),NA),
             max.value  = max(Result_cen),
@@ -146,14 +146,16 @@ fresh_AU_summary_WS0 <-  fresh_contact_geomeans %>%
 
 WS_GNIS_rollup <- fresh_AU_summary_WS0 %>%
   ungroup() %>%
-  group_by(AU_ID, AU_GNIS_Name, Pollu_ID, wqstd_code, period) %>%
+  group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
   summarise(IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
   mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
                                         TRUE ~ 0)) |> 
   mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', "3", "3B", "2", "5" ), ordered=TRUE)) |> 
-  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))   |> 
+  ungroup() |> 
+  select(-Char_Name)
 
 
 WS_GNIS_rollup_1 <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")
@@ -174,7 +176,9 @@ WS_GNIS_rollup_1 <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")
 #                                    prev_GNIS_category %in% c('3D','3','3B', '3C') & final_GNIS_cat %in% c('5','4A','4B', '4C') ~ "Insufficient to Impaired",
 #                                    prev_GNIS_category %in% c('3D','3','3B', '3C') & final_GNIS_cat %in% c('2') ~ "Insufficient to Attain"
 #   ))
-WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup_1, type = 'WS')
+WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup_1, type = 'WS')|> 
+  left_join(chars, by = join_by(Pollu_ID)) |> 
+  relocate(Char_Name, .after = AU_GNIS_Name)
 
 
 ### WS AU rollup ----------------------------------------------------------------------------------------------------
@@ -210,7 +214,9 @@ WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup_1, type = 'WS')
 
 WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup_delist)
 
-WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup)
+WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup) |> 
+  left_join(chars, by = join_by(Pollu_ID)) |> 
+  relocate(Char_Name, .after = AU_ID)
 
 ## Non- watershed unit categorization ---------------------------------------------------------------------------------------------------
 
@@ -286,14 +292,16 @@ fresh_AU_summary_no_WS0 <-  fresh_contact_geomeans_other %>%
   mutate(Delist_eligability = case_when(num_Samples >= 18 & num_ss_excursions <= binomial_delisting(num_Samples, 'Conventionals') & (Max_Geomean < Geomean_Crit | is.na(Max_Geomean) & IR_category == '2') ~ 1,
                                         TRUE ~ 0)) |> 
   select(-geomean_over, -geomean_exceed_date_periods, -ss_exceed_date_periods) %>%
-  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code )) |> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code )) |> 
   mutate(period = NA_character_)
 
 fresh_AU_summary_no_WS <- join_prev_assessments(fresh_AU_summary_no_WS0, AU_type = "Other")
 
 
 
-fresh_AU_summary_no_WS_delist <- assess_delist(fresh_AU_summary_no_WS, type = "Other")
+fresh_AU_summary_no_WS_delist <- assess_delist(fresh_AU_summary_no_WS, type = "Other")|> 
+  left_join(chars, by = join_by(Pollu_ID)) |> 
+  relocate(Char_Name, .after = AU_ID)
 
 
 

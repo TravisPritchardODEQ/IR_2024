@@ -6,15 +6,24 @@ library(odeqIRtools)
 
 
 
-coast_contact <- function(df, type = "coast", write_excel = TRUE){
+coast_contact <- function(df, type = "coast", write_excel = TRUE, database = 'IR_Dev'){
 # Testing and development settings --------------------------------------------------------------------------------
 
 
- #df <- entero_data 
- # type = "freshwater"
+ #df <- Bacteria_results 
+ # type = "coast"
  #write_excel = TRUE
-
+#database = 'IR_Dev'
+  # Char rename -----------------------------------------------------------------------------------------------------
+  con <- DBI::dbConnect(odbc::odbc(), database)
   
+  chars <- tbl(con, "LU_Pollutant") |> 
+    select(Pollu_ID, `Pollutant_DEQ WQS`) |> 
+    rename(Char_Name = `Pollutant_DEQ WQS`) |>
+    mutate(Pollu_ID = as.character(Pollu_ID)) |> 
+    collect()
+  
+  DBI::dbDisconnect(con)
 
 # Filter data down. -----------------------------------------------------------------------------------------------
 
@@ -91,7 +100,7 @@ coast_AU_summary_no_WS0 <-  coast_contact_geomeans_no_WS %>%
   filter(str_detect(AU_ID, "WS", negate = TRUE)) %>%
   arrange(MLocID) %>%
   ungroup() %>%
-  group_by(AU_ID,  Pollu_ID, wqstd_code ) %>%
+  group_by(AU_ID,  Char_Name, Pollu_ID, wqstd_code ) %>%
   summarise(num_Samples = as.numeric(n()),
             Max_Geomean = ifelse(!all(is.na(geomean)),max(geomean, na.rm = TRUE),NA),
             max.value  = max(Result_cen),
@@ -132,7 +141,9 @@ coast_AU_summary_no_WS0 <-  coast_contact_geomeans_no_WS %>%
          period = NA_character_) |> 
   mutate(Delist_eligability = case_when(num_Samples >= 18 & num_ss_excursions <= binomial_delisting(num_Samples, 'Conventionals') & IR_category == '2' ~ 1,
                                         TRUE ~ 0)) |> 
-  mutate(period = NA_character_)
+  mutate(period = NA_character_) |> 
+    ungroup() |> 
+    select(-Char_Name)
 
 coast_AU_summary_no_WS <-  join_prev_assessments(coast_AU_summary_no_WS0, AU_type = 'Other')
 
@@ -143,7 +154,9 @@ if(type == 'freshwater'){
   
 }
 
-coast_AU_summary_no_WS_delist <- assess_delist(coast_AU_summary_no_WS, type = 'Other')
+coast_AU_summary_no_WS_delist <- assess_delist(coast_AU_summary_no_WS, type = 'Other')|> 
+  left_join(chars, by = join_by(Pollu_ID)) |> 
+  relocate(Char_Name, .after = AU_ID)
 
 
 
@@ -161,7 +174,7 @@ if(nrow(coast_contact_geomeans_WS) > 0){
   coast_contact_geomeans_WS <- coast_contact_geomeans_WS |> 
   mutate(Geomean_Crit = 35,
          SS_Crit = 130 ) %>%
-  group_by(MLocID, AU_ID, AU_GNIS_Name) %>%
+  group_by(MLocID, AU_ID, AU_GNIS_Name, Char_Name) %>%
   arrange(SampleStartDate) %>%
   dplyr::mutate(d = runner(x = data.frame(SampleStartDate  = SampleStartDate,
                                           Result_cen = Result_cen,
@@ -199,7 +212,7 @@ if(nrow(coast_contact_geomeans_WS) > 0){
                                                                  TRUE ~ "no" ))
 
 
-# Categorization --------------------------------------------------------------------------------------------------
+## Categorization --------------------------------------------------------------------------------------------------
 
 
 
@@ -208,7 +221,7 @@ coast_AU_summary_WS0 <-  coast_contact_geomeans_WS %>%
   filter(str_detect(AU_ID, "WS", negate = FALSE)) %>%
   arrange(MLocID) %>%
   ungroup() %>%
-  group_by(MLocID, AU_ID, AU_GNIS_Name, Pollu_ID, wqstd_code, OWRD_Basin ) %>%
+  group_by(MLocID, AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, OWRD_Basin ) %>%
   summarise(num_Samples = as.numeric(n()),
             Max_Geomean = ifelse(!all(is.na(geomean)),max(geomean, na.rm = TRUE),NA),
             max.value  = max(Result_cen),
@@ -253,14 +266,16 @@ coast_AU_summary_WS0 <-  coast_contact_geomeans_WS %>%
 
 WS_GNIS_rollup <- coast_AU_summary_WS0 %>%
   ungroup() %>%
-  group_by(AU_ID, AU_GNIS_Name, Pollu_ID, wqstd_code, period) %>%
+  group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
   summarise(IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
   mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
                                         TRUE ~ 0)) |> 
   mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', "3", "3B", "2", "5" ), ordered=TRUE)) |> 
-  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period )) |> 
+  ungroup() |> 
+  select(-Char_Name) 
 
 coast_AU_summary_WS <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")
 
@@ -271,43 +286,76 @@ if(type == 'freshwater'){
   
 }
 
-WS_GNIS_rollup_delist <- assess_delist(coast_AU_summary_WS, type = 'WS')
+WS_GNIS_rollup_delist <- assess_delist(coast_AU_summary_WS, type = 'WS')|> 
+  left_join(chars, by = join_by(Pollu_ID)) |> 
+  relocate(Char_Name, .after = AU_GNIS_Name)
 
 WS_AU_rollup <- rollup_WS_AU(coast_AU_summary_WS)
 
-WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup)
+WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup) |> 
+  ungroup() |> 
+  select(-Char_Name) |> 
+  left_join(chars, by = join_by(Pollu_ID)) |> 
+  relocate(Char_Name, .after = AU_ID)
 
 
 #end if statement
 } 
 
 
+# prep data for export --------------------------------------------------------------------------------------------
+
+AU_display_other <- coast_AU_summary_no_WS_delist |> 
+  select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+
+# AU_display_ws <- WS_AU_rollup_joined |> 
+#   rename(prev_category = prev_AU_category,
+#          prev_rationale = prev_AU_rationale,
+#          final_AU_cat = IR_category_AU_24,
+#          Rationale = Rationale_AU)
+
+# 
+# AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
+#   mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
+#                                .default = Rationale))
+
+AU_display <- AU_display_other
+
 if(write_excel){
+  print("Writing excel doc")
   
   wb <- createWorkbook()
-  addWorksheet(wb, sheetName = "Coast Bacteria Data_WS")
-  addWorksheet(wb, sheetName = "WS station categorization")
-  addWorksheet(wb, sheetName = "WS AU categorization")
-  addWorksheet(wb, sheetName = "Coast Bacteria Data_Other")
-  addWorksheet(wb, sheetName = "Other AU categorization")
+  
+  
+  addWorksheet(wb, sheetName = "AU_Decisions", tabColour = 'forestgreen')
+  
+  addWorksheet(wb, sheetName = "Other_AU_categorization",tabColour = 'dodgerblue3')
+  addWorksheet(wb, sheetName = "WS station categorization", tabColour = 'lightblue3')
+  addWorksheet(wb, sheetName = "WS GNIS categorization", tabColour = 'lightyellow1')
+  
+  addWorksheet(wb, sheetName = "Coast Contact Raw Data", tabColour = 'paleturquoise2')
+  addWorksheet(wb, sheetName = "Coast Contact WS Data", tabColour = 'paleturquoise2')
+  addWorksheet(wb, sheetName = "Coast Contact other Data", tabColour = 'paleturquoise2')
+  
   
   header_st <- createStyle(textDecoration = "Bold", border = "Bottom")
-  #freezePane(wb, "Coast Bacteria Data_WS", firstRow = TRUE) 
- # freezePane(wb, "WS station categorization", firstRow = TRUE)
-  #freezePane(wb, "WS AU categorization", firstRow = TRUE)
-  freezePane(wb,  "Coast Bacteria Data_Other", firstRow = TRUE)
-  freezePane(wb, "Other AU categorization", firstRow = TRUE)
+  
+  writeData(wb = wb, sheet = "AU_Decisions", x = AU_display, headerStyle = header_st)
+  
+  writeData(wb = wb, sheet = "Other_AU_categorization", x = coast_AU_summary_no_WS_delist, headerStyle = header_st)
+  #writeData(wb = wb, sheet = "WS station categorization", x = WS_category, headerStyle = header_st)
+  #writeData(wb = wb, sheet = "WS GNIS categorization", x = WS_GNIS_rollup_delist, headerStyle = header_st)
+  
+  writeData(wb = wb, sheet = "Coast Contact Raw Data", x = df, headerStyle = header_st)
+  #writeData(wb = wb, sheet = "Coast Contact WS Data", x = coast_contact_geomeans_no_WS, headerStyle = header_st )
+  writeData(wb = wb, sheet = "Coast Contact other Data", x = coast_contact_geomeans_no_WS, headerStyle = header_st )
+  
 
   
-  #writeData(wb = wb, sheet = "Coast Bacteria Data_WS", x = coast_contact_geomeans_WS, headerStyle = header_st)
-  #writeData(wb = wb, sheet = "WS station categorization", x = coast_AU_summary_WS, headerStyle = header_st)
-  #writeData(wb = wb, sheet = "WS AU categorization", x = WS_AU_rollup, headerStyle = header_st)
-  writeData(wb = wb, sheet =  "Coast Bacteria Data_Other", x = coast_contact_geomeans_no_WS, headerStyle = header_st)
-  writeData(wb = wb, sheet = "Other AU categorization", x = coast_AU_summary_no_WS, headerStyle = header_st )
   
-  
-  print("Writing excel doc")
-  saveWorkbook(wb, "Parameters/Outputs/bacteria coast contact.xlsx", overwrite = TRUE) 
+
+  saveWorkbook(wb, paste0("Parameters/Outputs/bacteria coast contact- ", Sys.Date(), ".xlsx"), overwrite = TRUE) 
   
 }
 
@@ -327,6 +375,7 @@ bacteria_coast_ws <- list(coast_bacteria_data_ws=as.data.frame(coast_contact_geo
 bacteria_coast <- c(bacteria_coast, bacteria_coast_ws)             
 
 }
+
 
 return(bacteria_coast)
 
