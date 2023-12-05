@@ -199,7 +199,7 @@ AL_tox_aluminum_assess_fun <- function(df_data = al_criteria_excursions, AU_type
 # Testing ---------------------------------------------------------------------------------------------------------
 # df_data = al_criteria_excursions
 # 
-# AU_type = 'WS'
+# AU_type = 'other'
 
 
 # 
@@ -226,6 +226,8 @@ Results_tox_AL_aluminum_cats <- df_data %>%
             percent_3d = round(sum(Result_Operator == "<" & IRResultNWQSunit > Final_CCC )/num_samples * 100),
             num_fraction_types = n_distinct(Simplified_Sample_fraction),
             num_samples_bioavailable_fraction =sum(Simplified_Sample_fraction == "Bioavailable"), 
+            num_samples_bioavailable_calc_crit = sum(Simplified_Sample_fraction == "Bioavailable" & default_crit == "No"),
+            num_samples_bioavailable_default_crit = sum(Simplified_Sample_fraction == "Bioavailable" & default_crit == "Yes"),
             num_samples_total_fraction = sum(Simplified_Sample_fraction == "Total"),
             num_Samples_dissolved_fraction = sum(Simplified_Sample_fraction == "Dissolved"),
             num_excursions_all = sum(excursion),
@@ -239,46 +241,79 @@ Results_tox_AL_aluminum_cats <- df_data %>%
             critical_excursions_3B = binomial_excursions(num_samples_crit_excursion_3B, type = "Toxics")) %>%
   # Assign categories
   mutate(IR_category = case_when(percent_3d == 100 ~ "3D",
-                                 num_samples_bioavailable_fraction >= 10 & num_excursions_bioavail_calc_crit >= 10  
-                                    & num_excursions_bioavail_calc_crit >= critical_excursions_bioavail ~ '5',
                                  
-                                 num_samples_bioavailable_fraction >= 10 & num_excursions_bioavail_calc_crit >= 10  
-                                    & num_excursions_bioavail_calc_crit < critical_excursions_bioavail ~ '2',
+                                 num_samples_bioavailable_calc_crit > 2 
+                                    & num_excursions_bioavail_calc_crit > binomial_excursions(num_samples_bioavailable_calc_crit, type = "Toxics") ~ '5',
                                  
-                                 num_samples_bioavailable_fraction > 0 & num_samples_bioavailable_fraction < 10 &
-                                   num_excursions_bioavail_calc_crit >= critical_excursions_bioavail ~ '5',
+                                 num_samples_bioavailable_default_crit > 2 
+                                    & num_excursions_bioavail_default_crit > binomial_excursions(num_samples_bioavailable_default_crit, type = "Toxics") ~ '3B',
                                  
-                                 num_samples_bioavailable_fraction < 10 & num_excursions_bioavailable_fraction + num_excursions_total_fraction >= 1 ~ '3B',
+                                 num_samples_bioavailable_fraction >= 10   
+                                    & num_excursions_bioavailable_fraction < critical_excursions_bioavail ~ '2',
                                  
-                                 TRUE ~ '3'),
+                                 num_samples_bioavailable_fraction < 10 &  num_samples_bioavailable_fraction > 0 & num_samples_total_fraction > 1
+                                    & (num_excursions_bioavailable_fraction + num_excursions_total_fraction) >  binomial_excursions((num_excursions_bioavailable_fraction + num_excursions_total_fraction), type = "Toxics") ~ '3B',
+                                 
+                                 num_samples_bioavailable_fraction < 10 &  num_samples_bioavailable_fraction > 0 & num_samples_total_fraction > 1
+                                 & (num_excursions_bioavailable_fraction + num_excursions_total_fraction) <=  binomial_excursions((num_excursions_bioavailable_fraction + num_excursions_total_fraction), type = "Toxics") ~ '3',
+                                 
+                                 num_samples_bioavailable_fraction == 0 & num_samples_total_fraction > 2
+                                    & num_excursions_total_fraction > binomial_excursions(num_samples_total_fraction, type = "Toxics") ~ '3B',
+                                 
+                                 .default = '3'  
+                                 ),
          Rationale =  case_when(percent_3d == 100 ~ paste0("Insufficient data: All results are non-detects with detection limits above criteria- ", num_samples, " total samples"),
-                                num_samples_bioavailable_fraction >= 10 & num_excursions_bioavail_calc_crit >= 10  
-                                & num_excursions_bioavail_calc_crit >= critical_excursions_bioavail ~ paste0("Impaired: ", num_excursions_bioavail_calc_crit, 
-                                                                                                             " excursions of calculated criteria in bioavailable fraction above critical excursion value of ",
-                                                                                                             critical_excursions_bioavail, ". ",num_samples_bioavailable_fraction, " bioavailable samples." ),
                                 
-                                num_samples_bioavailable_fraction >= 10 & num_excursions_bioavail_calc_crit >= 10  
-                                & num_excursions_bioavail_calc_crit < critical_excursions_bioavail ~  paste0("Attaining: ", num_excursions_bioavail_calc_crit, 
-                                                                                                             " excursions of calculated criteria in bioavailable fraction below critical excursion value of ",
-                                                                                                             critical_excursions_bioavail, ". ",num_samples_bioavailable_fraction, " bioavailable samples." ),
-                                
-                                num_samples_bioavailable_fraction > 0 & num_samples_bioavailable_fraction < 10 &
-                                  num_excursions_bioavail_calc_crit >= critical_excursions_bioavail ~ paste0("Impaired: ", num_excursions_bioavail_calc_crit, 
-                                                                                                             " excursions of calculated criteria in bioavailable fraction above critical excursion value of ",
-                                                                                                             critical_excursions_bioavail, ". ",num_samples_bioavailable_fraction, " bioavailable samples." ),
-                                
-                                num_samples_bioavailable_fraction < 10 & num_excursions_bioavailable_fraction + num_excursions_total_fraction >= 1 ~ paste0("Insufficient data: ", 
-                                                                                                                                                            num_excursions_bioavailable_fraction + num_excursions_total_fraction,
-                                                                                                                                                            " total excursions of criteria. ",
-                                                                                                                                                            num_excursions_bioavailable_fraction, 
-                                                                                                                                                            " excursions of ",
-                                                                                                                                                            num_samples_bioavailable_fraction, " bioavailable samples, ",
-                                                                                                                                                            num_excursions_total_fraction,
-                                                                                                                                                            " excursions of ",
-                                                                                                                                                            num_samples_total_fraction, 
-                                                                                                                                                            " total fraction samples. "),
-                                
-                                TRUE ~ paste0("Insufficient data: ", 
+                                num_samples_bioavailable_calc_crit > 2 
+                                & num_excursions_bioavail_calc_crit > binomial_excursions(num_samples_bioavailable_calc_crit, type = "Toxics") ~ paste0("Impaired: ", num_excursions_bioavail_calc_crit, 
+                                                                                                                                                        " excursions of calculated criteria in bioavailable fraction above critical excursion value of ",
+                                                                                                                                                        binomial_excursions(num_samples_bioavailable_calc_crit, type = "Toxics"), ". ",num_samples_bioavailable_fraction, " bioavailable samples." ),
+                                num_samples_bioavailable_default_crit > 2 
+                                    & num_excursions_bioavail_default_crit > binomial_excursions(num_samples_bioavailable_default_crit, type = "Toxics") ~ paste0('Insufficient data- Potential Concern. ', 
+                                                                                                                                                                  num_excursions_bioavail_default_crit, " excursions of regional default criteria. ",
+                                                                                                                                                                  num_samples_bioavailable_fraction, " samples of bioavailable fraction. ",
+                                                                                                                                                                  num_samples_bioavailable_default_crit, " samples used default criteria."),
+                                 
+                                 num_samples_bioavailable_fraction >= 10   
+                                    & num_excursions_bioavailable_fraction < critical_excursions_bioavail ~ paste0('Attaining. ',
+                                                                                                                   num_samples_bioavailable_fraction, 
+                                                                                                                   " samples of the bioavailable fraction. ",
+                                                                                                                   num_excursions_bioavailable_fraction, 
+                                                                                                                   " excursions of criteria. ",
+                                                                                                                   critical_excursions_bioavail, 
+                                                                                                                   " needed to list."),
+                                 
+                                 num_samples_bioavailable_fraction < 10 &  num_samples_bioavailable_fraction > 0 & num_samples_total_fraction > 1
+                                    & (num_excursions_bioavailable_fraction + num_excursions_total_fraction) >  binomial_excursions((num_excursions_bioavailable_fraction + num_excursions_total_fraction), type = "Toxics") ~ paste0('Insuffcient Data: Mixed bioavailable and total recoverable samples.',
+                                                                                                                                                                                                                                      num_samples_bioavailable_fraction, ' samples in the bioavailable fraction, ',
+                                                                                                                                                                                                                                      num_samples_total_fraction, ' samples in the total fraction.',
+                                                                                                                                                                                                                                      (num_excursions_bioavailable_fraction + num_excursions_total_fraction), 
+                                                                                                                                                                                                                                      " total excursions (",
+                                                                                                                                                                                                                                      num_excursions_bioavailable_fraction, 
+                                                                                                                                                                                                                                      ' bioavilable excursions, ',
+                                                                                                                                                                                                                                      num_excursions_total_fraction, 
+                                                                                                                                                                                                                                      ' total fraction excurions'
+                                                                                                                                                                                                                                      ),
+                                 
+                                 num_samples_bioavailable_fraction < 10 &  num_samples_bioavailable_fraction > 0 & num_samples_total_fraction > 1
+                                 & (num_excursions_bioavailable_fraction + num_excursions_total_fraction) <=  binomial_excursions((num_excursions_bioavailable_fraction + num_excursions_total_fraction), type = "Toxics") ~ paste0('Insuffcient Data: Mixed bioavailable and total recoverable samples.',
+                                                                                                                                                                                                                                    num_samples_bioavailable_fraction, ' samples in the bioavailable fraction, ',
+                                                                                                                                                                                                                                    num_samples_total_fraction, ' samples in the total fraction.',
+                                                                                                                                                                                                                                    (num_excursions_bioavailable_fraction + num_excursions_total_fraction), 
+                                                                                                                                                                                                                                    " total excursions (",
+                                                                                                                                                                                                                                    num_excursions_bioavailable_fraction, 
+                                                                                                                                                                                                                                    ' bioavilable excursions, ',
+                                                                                                                                                                                                                                    num_excursions_total_fraction, 
+                                                                                                                                                                                                                                    ' total fraction excurions'
+                                 ),
+                                 
+                                 num_samples_bioavailable_fraction == 0 & num_samples_total_fraction > 2
+                                    & num_excursions_total_fraction > binomial_excursions(num_samples_total_fraction, type = "Toxics") ~ paste0('Insufficient Data. No bioavailavble fraction available. ',
+                                                                                                                                                num_excursions_total_fraction ,' excursions of total fraction results are less than number needed for Cat3B (',
+                                                                                                                                                binomial_excursions(num_samples_total_fraction, type = "Toxics"), 
+                                                                                                                                                'needed to list).'),
+                                 
+                                 .default = paste0("Insufficient data: ", 
                                               num_excursions_bioavailable_fraction + num_excursions_total_fraction + num_Samples_dissolved_fraction,
                                               " total excursions of criteria. ",
                                               num_excursions_bioavailable_fraction, 
@@ -293,34 +328,116 @@ Results_tox_AL_aluminum_cats <- df_data %>%
                                               num_Samples_dissolved_fraction,
                                               " dissolved fraction samples. ",
                                               num_samples, 
-                                              " total samples."))
-                                 
-                                   
-                                 
-                                )
-Results_tox_AL_aluminum_cats <- join_prev_assessments(Results_tox_AL_aluminum_cats, AU_type = AU_type)
+                                              " total samples.")
+                                )) |> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code)) |> 
+  mutate(period = NA_character_) |> 
+  mutate(Delist_eligability = case_when(num_samples_bioavailable_fraction >= 18 & num_excursions_bioavailable_fraction <= binomial_delisting(num_samples_bioavailable_fraction, 'Toxics')  ~ 1,
+                                        TRUE ~ 0)) 
+
+  
+
+
+
+
+  
 
 }
 
+
+
+# char rename -----------------------------------------------------------------------------------------------------
+
+
+con <- DBI::dbConnect(odbc::odbc(), database)
+
+db_qry <- glue::glue_sql( "SELECT distinct [Pollu_ID]
+      ,[Pollutant_DEQ WQS] as Char_Name
+  FROM [IntegratedReport].[dbo].[LU_Pollutant]", .con = con)
+
+# Send query to database and return with the data
+Char_rename <-  DBI::dbGetQuery(con, db_qry) |> 
+  mutate(Pollu_ID = as.character(Pollu_ID))
+
+
+# Watershed Assessment --------------------------------------------------------------------------------------------
+
 AL_Tox_AL_WS <- AL_tox_aluminum_assess_fun(df_data = al_criteria_excursions, AU_type = "WS")
-AL_Tox_AL_other <-AL_tox_aluminum_assess_fun(df_data = al_criteria_excursions, AU_type = "other") %>%
-  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code))
+
+## GNIS rollup -----------------------------------------------------------------------------------------------------
 
 
-WS_AU_rollup <- AL_Tox_AL_WS %>%
-  select(AU_ID, MLocID, AU_GNIS_Name, Pollu_ID, wqstd_code,  Char_Name, IR_category, Rationale) %>%
+WS_GNIS_rollup <- AL_Tox_AL_WS %>%
   ungroup() %>%
-  group_by(AU_ID, Char_Name, Pollu_ID, wqstd_code) %>%
-  summarise(IR_category_AU = max(IR_category),
-            Rationale_AU = str_c(MLocID, ": ", Rationale, collapse =  " ~ " ) ) %>%
-  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code))
+  group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
+  summarise(IR_category_GNIS_24 = max(IR_category),
+            Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
+            Delist_eligability = max(Delist_eligability)) %>% 
+  mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
+                                        TRUE ~ 0)) |> 
+  mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', "3", "3B", "2", "5" ), ordered=TRUE)) |> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
 
-WS_AU_rollup <- join_prev_assessments(WS_AU_rollup, AU_type = 'other')
+WS_GNIS_rollup <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS") |> 
+  select(-Char_Name) |> 
+  left_join(Char_rename) |> 
+  relocate(Char_Name, .after = AU_GNIS_Name)
+### Delist process --------------------------------------------------------------------------------------------------
 
-Results_tox_Al_AL <- list(data =     al_criteria_excursions,
-                          AL_Tox_AL_WS = AL_Tox_AL_WS,
-                          AL_Tox_AL_other = AL_Tox_AL_other,
-                          AL_Tox_AL_WS_rollup = WS_AU_rollup)
+
+WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')
+
+## AU Rollup -------------------------------------------------------------------------------------------------------
+
+
+WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup, char_name_field = Char_Name) 
+
+
+# Other assessment ------------------------------------------------------------------------------------------------
+
+AL_Tox_AL_other <-AL_tox_aluminum_assess_fun(df_data = al_criteria_excursions, AU_type = "other")
+
+
+other_category <- join_prev_assessments(AL_Tox_AL_other, AU_type = 'Other')|> 
+  select(-Char_Name) |> 
+  left_join(Char_rename) |> 
+  relocate(Char_Name, .after = AU_ID)
+
+other_category_delist <-  assess_delist(other_category, type = "Other")  
+
+# prep data for export --------------------------------------------------------------------------------------------
+
+
+
+# prep data for export --------------------------------------------------------------------------------------------
+
+AU_display_other <- other_category_delist |> 
+  ungroup() |> 
+  select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+
+AU_display_ws <- WS_AU_rollup |> 
+  rename(prev_category = prev_AU_category,
+         prev_rationale = prev_AU_rationale,
+         final_AU_cat = IR_category_AU_24,
+         Rationale = Rationale_AU)
+
+AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
+  mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
+                               .default = Rationale))
+
+
+
+# Export ----------------------------------------------------------------------------------------------------------
+
+Results_tox_Al_AL <- list(data = al_criteria_excursions,
+                            AU_Decisions = AU_display,
+                            Other_AU_categorization = other_category_delist,
+                            WS_Station_cat = AL_Tox_AL_WS,
+                            WS_GNIS_cat = WS_GNIS_rollup_delist)
+
+
+
 
 return(Results_tox_Al_AL)
 

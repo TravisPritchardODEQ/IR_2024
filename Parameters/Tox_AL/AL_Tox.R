@@ -75,17 +75,22 @@ tox_AL_penta_other_AU_cat       <- tox_AL_penta_cat[["Other_AU_categorization"]]
 tox_AL_penta_WS_cats            <- tox_AL_penta_cat[["WS_Station_cat"]]
 tox_AL_penta_GNIS_cat           <- tox_AL_penta_cat[["WS_GNIS_cat"]]
 
-#Stopped here.
-tox_AL_Ammonia_data          <- tox_AL_Ammonia[["data"]]
-tox_AL_Ammonia_other_cats    <- tox_AL_Ammonia[["AL_tox_Ammonia_other"]]
-tox_AL_Ammonia_WS_cats       <- tox_AL_Ammonia[["AL_tox_Ammonia_WS"]]
-tox_AL_Ammonia_WS_rollup     <- tox_AL_Ammonia[["AL_tox_Ammonia_WS_rollup"]]
+tox_AL_Ammonia_data             <- tox_AL_Ammonia[["data"]]
+tox_AL_Ammonia_AU_Decisions     <- tox_AL_Ammonia[['AU_Decisions']]
+tox_AL_Ammonia_other_AU_cat     <- tox_AL_Ammonia[["Other_AU_categorization"]]
+tox_AL_Ammonia_WS_cats          <- tox_AL_Ammonia[["WS_Station_cat"]]
+tox_AL_Ammonia_GNIS_cat         <- tox_AL_Ammonia[["WS_GNIS_cat"]]
 
 
-tox_AL_Aluminum_data       <-  tox_AL_aluminum[['data']]
-tox_AL_Aluminum_other_cats <-  tox_AL_aluminum[['AL_Tox_AL_other']]
-tox_AL_Aluminum_WS_cats    <-  tox_AL_aluminum[['AL_Tox_AL_WS']]
-tox_AL_Aluminum_WS_rollup  <-  tox_AL_aluminum[['AL_Tox_AL_WS_rollup']]
+
+
+tox_AL_Aluminum_data            <-  tox_AL_aluminum[["data"]]
+tox_AL_Aluminum_AU_Decisions    <-  tox_AL_aluminum[['AU_Decisions']]
+tox_AL_Aluminum_other_AU_cat    <-  tox_AL_aluminum[["Other_AU_categorization"]]
+tox_AL_Aluminum_WS_cats         <-  tox_AL_aluminum[["WS_Station_cat"]]
+tox_AL_Aluminum_GNIS_cat        <-  tox_AL_aluminum[["WS_GNIS_cat"]]
+
+
 
 tox_AL_Copper_data        <- Copper_categories[['data']]
 tox_AL_Copper_other_cats   <- Copper_categories[['AL_Tox_CU_other']]
