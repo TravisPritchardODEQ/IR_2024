@@ -8,7 +8,7 @@ library(glue)
 # This function builds an export table to run the copper BLM. It includes 
 # all necessary ancillary data. 
 
-#Where there are multiple fractions, or multiple names for constiuents, this 
+#Where there are multiple fractions, or multiple names for constituents, this 
 #script will export the maximums. 
 
 Copper_data <- function(database){
