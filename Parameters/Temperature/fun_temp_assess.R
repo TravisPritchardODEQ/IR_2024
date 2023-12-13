@@ -10,7 +10,7 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
   
   # Testing ---------------------------------------------------------------------------------------------------------
   
-  # df <- Results
+  # df <- temp_results
   # write_excel = TRUE
   
   
@@ -712,7 +712,9 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
            Rationale = Rationale_AU) |> 
     select(AU_ID, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
            final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
-  AU_display <- bind_rows(AU_display_other_yearround,AU_display_WS_yearround,  AU_display_other_spawn, AU_display_WS_spawnd)
+ 
+   AU_display <- bind_rows(AU_display_other_yearround,AU_display_WS_yearround,  AU_display_other_spawn, AU_display_WS_spawnd) |> 
+     join_TMDL(type = 'AU')
   
   
 
@@ -739,7 +741,9 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
 
 # GNIS categorization ---------------------------------------------------------------------------------------------
 
-WS_GNIS_cat <- bind_rows(WS_GNIS_rollup_delist, WS_GNIS_rollup_delist_spawn)
+WS_GNIS_cat <- bind_rows(WS_GNIS_rollup_delist, WS_GNIS_rollup_delist_spawn) |> 
+     join_TMDL(type = 'GNIS') |> 
+    select(-distinct_years_sufficient_crit_period_max)
   
   
   

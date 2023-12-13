@@ -276,8 +276,12 @@ AU_display_ws <- WS_AU_rollup_joined |>
 
 AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
   mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
-                               .default = Rationale))
+                               .default = Rationale)) |> 
+  join_TMDL(type = 'AU')
+  
 
+WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |> 
+  join_TMDL(type = 'GNIS')
 
 
 # Write excel docs ------------------------------------------------------------------------------------------------

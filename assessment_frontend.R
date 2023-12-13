@@ -1,5 +1,5 @@
 library(tidyverse)
-#devtools::install_github('TravisPritchardODEQ/odeqIRtools', ref = 'prev_assessment_join')
+#devtools::install_github('TravisPritchardODEQ/odeqIRtools')
 library(odeqIRtools)
 
 
@@ -15,3 +15,5 @@ source('Parameters/Temperature/fun_temp_assess.R')
 
 temp_results <- temp_data("IR_Dev")
 temp_assessments <- fun_temp_analysis(temp_results, write_excel = TRUE)
+
+save(temp_assessments, file = 'Parameters/Outputs/rdata files/temperature.Rdata')

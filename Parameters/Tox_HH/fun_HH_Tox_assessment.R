@@ -1,6 +1,6 @@
 library(lubridate)
 library(openxlsx)
-fun_Tox_HH_analysis <-function(df, write_excel = TRUE){ 
+fun_Tox_HH_analysis <-function(df, write_excel = TRUE, database = "IR_Dev"){ 
   
 
 # Testing ---------------------------------------------------------------------------------------------------------
@@ -157,7 +157,7 @@ fun_Tox_HH_analysis <-function(df, write_excel = TRUE){
 # assessment ------------------------------------------------------------------------------------------------------
 
 
-# WS --------------------------------------------------------------------------------------------------------------
+
 
   HH_tox_assess_fun <- function(df_data = tox_HH_data, AU_type){
     
@@ -216,29 +216,108 @@ fun_Tox_HH_analysis <-function(df, write_excel = TRUE){
                                     TRUE ~ "ERROR")) %>%
         arrange(AU_ID, Pollutant) %>%
       mutate(IR_category = factor(IR_category, levels=c("3D", "3", "3B", "2", "5" ), ordered=TRUE)) %>%
-      rename(Char_Name = Pollutant)
+      rename(Char_Name = Pollutant)|> 
+      mutate(period = NA_character_) |> 
+      mutate(Delist_eligability = case_when(num_samples >= 18 & IR_category == '2'  ~ 1,
+                                            TRUE ~ 0)) 
     
-    tox_HH_assessment <- join_prev_assessments(tox_HH_assessment, AU_type = AU_type)
+
     
     return(tox_HH_assessment)
     
   }
   
   
+  
+  # char rename -----------------------------------------------------------------------------------------------------
+  
+  
+  con <- DBI::dbConnect(odbc::odbc(), database)
+  
+  db_qry <- glue::glue_sql( "SELECT distinct [Pollu_ID]
+      ,[Pollutant_DEQ WQS] as Char_Name
+  FROM [IntegratedReport].[dbo].[LU_Pollutant]", .con = con)
+  
+  # Send query to database and return with the data
+  Char_rename <-  DBI::dbGetQuery(con, db_qry) |> 
+    mutate(Pollu_ID = as.character(Pollu_ID))
+  
+  
+  # Watershed Assessment --------------------------------------------------------------------------------------------
+  
+  
   tox_HH_WS_assessments <- HH_tox_assess_fun(df_data = tox_HH_data, AU_type = 'WS')
   
+  ## GNIS rollup -----------------------------------------------------------------------------------------------------
+  
+  
+  WS_GNIS_rollup <- tox_HH_WS_assessments %>%
+    ungroup() %>%
+    group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
+    summarise(IR_category_GNIS_24 = max(IR_category),
+              Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
+              Delist_eligability = max(Delist_eligability)) %>% 
+    mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
+                                          TRUE ~ 0)) |> 
+    mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', '3D',"3", "3B","3C", "2", "5", '4A', '4B', '4C'), ordered=TRUE)) |> 
+    mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
+  
+  WS_GNIS_rollup <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS") |> 
+    select(-Char_Name) |> 
+    left_join(Char_rename) |> 
+    relocate(Char_Name, .after = AU_GNIS_Name)
+  
+  ### Delist process --------------------------------------------------------------------------------------------------
+  
+  
+  WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')
+  
+  ## AU Rollup -------------------------------------------------------------------------------------------------------
+  WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup, char_name_field = Char_Name) 
+  
+  # Other assessment ------------------------------------------------------------------------------------------------
+
   tox_HH_other_assessments <- HH_tox_assess_fun(df_data = tox_HH_data, AU_type = 'other')
   
- 
+  other_category <- join_prev_assessments(tox_HH_other_assessments, AU_type = 'Other')|> 
+    ungroup() |> 
+    select(-Char_Name) |> 
+    left_join(Char_rename) |> 
+    relocate(Char_Name, .after = AU_ID)
   
-  WS_AU_rollup <- tox_HH_WS_assessments %>%
-    select(AU_ID, MLocID, AU_GNIS_Name, Pollu_ID, wqstd_code, Char_Name,  IR_category, Rationale) %>%
-    group_by(AU_ID, Pollu_ID, wqstd_code, Char_Name) %>%
-    summarise(IR_category_AU = max(IR_category),
-              Rationale_AU = str_c(MLocID, ": ", Rationale, collapse =  " ~ " ) ) %>%
-    mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code))
+  other_category_delist <-  assess_delist(other_category, type = "Other")  |> 
+    mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
   
-  WS_AU_rollup <- join_prev_assessments(WS_AU_rollup, AU_type = "other")
+   
+  
+  # prep data for export --------------------------------------------------------------------------------------------
+  
+  AU_display_other <- other_category_delist |> 
+    select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+           final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+  
+  AU_display_ws <- WS_AU_rollup |> 
+    rename(prev_category = prev_AU_category,
+           prev_rationale = prev_AU_rationale,
+           final_AU_cat = IR_category_AU_24,
+           Rationale = Rationale_AU)
+  
+  AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
+    mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
+                                 .default = Rationale))
+  
+  
+  
+  # Export ----------------------------------------------------------------------------------------------------------
+  
+  Results_tox_hard_AL <- list(data =                     tox_HH_data,
+                              AU_Decisions = AU_display,
+                              Other_AU_categorization = other_category_delist,
+                              WS_Station_cat = tox_HH_WS_assessments,
+                              WS_GNIS_cat = WS_GNIS_rollup_delist)
+  
+  
+  
   
   
   if(write_excel){
@@ -247,24 +326,34 @@ fun_Tox_HH_analysis <-function(df, write_excel = TRUE){
     wb <- createWorkbook()
     
     header_st <- createStyle(textDecoration = "Bold", border = "Bottom")
-
-    addWorksheet(wb, sheetName = "HH Toxt Data")
-    freezePane(wb, "HH Toxt Data", firstRow = TRUE) 
     
-    cloneWorksheet(wb, "HH Tox WS Station Cat", clonedSheet =  "HH Toxt Data")
-    cloneWorksheet(wb, "WS AU combined Cat", clonedSheet =  "HH Toxt Data")
-    cloneWorksheet(wb, "HH Tox Other AU Cat", clonedSheet =  "HH Toxt Data")
-
+    addWorksheet(wb, sheetName = "AU_Decisions", tabColour = 'forestgreen')
+   
     
-    writeData(wb, "HH Toxt Data", x = tox_HH_data, headerStyle = header_st) 
-    writeData(wb, "HH Tox WS Station Cat", x = tox_HH_WS_assessments, headerStyle = header_st) 
-    writeData(wb, "WS AU combined Cat", x = WS_AU_rollup, headerStyle = header_st) 
-    writeData(wb, "HH Tox Other AU Cat", x= tox_HH_other_assessments,  headerStyle = header_st) 
+    addWorksheet(wb, sheetName = "Other_AU_categorization",tabColour = 'dodgerblue3')
+    addWorksheet(wb, sheetName = "WS station categorization", tabColour = 'lightblue3')
+    addWorksheet(wb, sheetName = "WS GNIS categorization", tabColour = 'lightyellow1')
+    
+    addWorksheet(wb, sheetName = "HH Tox Data", tabColour = 'paleturquoise2')
+
+    freezePane(wb, "AU_Decisions",             firstRow = TRUE) 
+    freezePane(wb, "Other_AU_categorization",   firstRow = TRUE) 
+    freezePane(wb, "WS station categorization", firstRow = TRUE) 
+    freezePane(wb, "WS GNIS categorization",    firstRow = TRUE) 
+    freezePane(wb, "HH Tox Data",               firstRow = TRUE) 
+    
+    
+  
+    writeData(wb,  "AU_Decisions",                x = AU_display,               headerStyle = header_st) 
+    writeData(wb,  "Other_AU_categorization",     x = other_category_delist,     headerStyle = header_st) 
+    writeData(wb,  "WS station categorization",   x = tox_HH_WS_assessments,              headerStyle = header_st) 
+    writeData(wb,  "WS GNIS categorization",      x = WS_GNIS_rollup_delist,  headerStyle = header_st) 
+    writeData(wb,  "HH Tox Data",                 x = tox_HH_data,  headerStyle = header_st) 
     
 
     
     print("Writing excel doc")
-    saveWorkbook(wb, "Parameters/Outputs/Tox_HH.xlsx", overwrite = TRUE) 
+    saveWorkbook(wb, paste0("Parameters/Outputs/Tox_HH-", Sys.Date(), ".xlsx"), overwrite = TRUE) 
     
   }
   
