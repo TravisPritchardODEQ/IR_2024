@@ -292,10 +292,24 @@ pH_assessment <- function(cont_data, grab_data, write_xlsx = TRUE){
   
   AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
     mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
-                                 .default = Rationale))
+                                 .default = Rationale))|> 
+    join_TMDL(type = 'AU')|> 
+    join_AU_info() |> 
+    relocate(prev_category, .after = year_last_assessed) |> 
+    relocate(prev_rationale, .after = prev_category) |> 
+    mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
+                                          .default = year_last_assessed)) |> 
+    mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
+                                   .default = year_last_assessed)) 
   
 
   
+  WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |> 
+    join_TMDL(type = 'GNIS') |> 
+    join_AU_info()|> 
+    relocate(Rationale_GNIS, .after = final_GNIS_cat) |> 
+    relocate(prev_GNIS_category, .after = Rationale_GNIS) |> 
+    relocate(prev_GNIS_rationale, .after = prev_GNIS_category)  
 
 # write xlsx ------------------------------------------------------------------------------------------------------
 

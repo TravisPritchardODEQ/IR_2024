@@ -1,6 +1,6 @@
 
 
-fresh_contact_rec <- function(df, write_excel = TRUE){
+fresh_contact_rec <- function(df, write_excel = TRUE, database = "IR_Dev"){
 
 
   
@@ -14,6 +14,17 @@ library(runner)
 library(openxlsx)
   
   
+  
+  # Char rename -----------------------------------------------------------------------------------------------------
+  con <- DBI::dbConnect(odbc::odbc(), database)
+  
+  chars <- tbl(con, "LU_Pollutant") |> 
+    select(Pollu_ID, `Pollutant_DEQ WQS`) |> 
+    rename(Char_Name = `Pollutant_DEQ WQS`) |>
+    mutate(Pollu_ID = as.character(Pollu_ID)) |> 
+    collect()
+  
+  DBI::dbDisconnect(con)
 
 # Initial Filtering -----------------------------------------------------------------------------------------------
 
@@ -364,8 +375,27 @@ AU_display_ws_entero <- entero_ws_AU_cat |>
 
 AU_display <- bind_rows(AU_display_other, AU_display_other_entero, AU_display_ws, AU_display_ws_entero) |> 
   mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
-                               .default = Rationale))
+                               .default = Rationale))|> 
+  join_TMDL(type = 'AU')|> 
+  join_AU_info() |> 
+  relocate(prev_category, .after = year_last_assessed) |> 
+  relocate(prev_rationale, .after = prev_category) 
 
+
+WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |> 
+  join_TMDL(type = 'GNIS') |> 
+  join_AU_info()|> 
+  relocate(Rationale_GNIS, .after = final_GNIS_cat) |> 
+  relocate(prev_GNIS_category, .after = Rationale_GNIS) |> 
+  relocate(prev_GNIS_rationale, .after = prev_GNIS_category)  
+
+
+entero_ws_GNIS_cat <- entero_ws_GNIS_cat|> 
+  join_TMDL(type = 'GNIS') |> 
+  join_AU_info()|> 
+  relocate(Rationale_GNIS, .after = final_GNIS_cat) |> 
+  relocate(prev_GNIS_category, .after = Rationale_GNIS) |> 
+  relocate(prev_GNIS_rationale, .after = prev_GNIS_category)  
 
 
 # Create excel doc ------------------------------------------------------------------------------------------------

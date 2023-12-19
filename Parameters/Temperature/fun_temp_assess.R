@@ -714,8 +714,10 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
            final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
  
    AU_display <- bind_rows(AU_display_other_yearround,AU_display_WS_yearround,  AU_display_other_spawn, AU_display_WS_spawnd) |> 
-     join_TMDL(type = 'AU')
-  
+     join_TMDL(type = 'AU')|> 
+     join_AU_info() |> 
+     relocate(prev_category, .after = year_last_assessed) |> 
+     relocate(prev_rationale, .after = prev_category) 
   
 
 ## Pull together Other_AU_categorization decisions ------------------------------------------------------------------------------------
@@ -743,7 +745,13 @@ fun_temp_analysis <- function(df, write_excel = TRUE){
 
 WS_GNIS_cat <- bind_rows(WS_GNIS_rollup_delist, WS_GNIS_rollup_delist_spawn) |> 
      join_TMDL(type = 'GNIS') |> 
-    select(-distinct_years_sufficient_crit_period_max)
+    select(-distinct_years_sufficient_crit_period_max) |> 
+    join_AU_info()|> 
+    relocate(Rationale_GNIS, .after = final_GNIS_cat) |> 
+    relocate(prev_GNIS_category, .after = Rationale_GNIS) |> 
+    relocate(prev_GNIS_rationale, .after = prev_GNIS_category)  
+   
+    
   
   
   

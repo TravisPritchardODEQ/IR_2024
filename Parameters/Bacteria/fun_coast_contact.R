@@ -10,7 +10,7 @@ coast_contact <- function(df, type = "coast", write_excel = TRUE, database = 'IR
 # Testing and development settings --------------------------------------------------------------------------------
 
 
- #df <- Bacteria_results 
+ #df <- entero_data 
  # type = "coast"
  #write_excel = TRUE
 #database = 'IR_Dev'
@@ -294,7 +294,7 @@ WS_AU_rollup <- rollup_WS_AU(coast_AU_summary_WS)
 
 WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup) |> 
   ungroup() |> 
-  select(-Char_Name) |> 
+  select(-any_of("Char_Name")) |> 
   left_join(chars, by = join_by(Pollu_ID)) |> 
   relocate(Char_Name, .after = AU_ID)
 
@@ -320,7 +320,13 @@ AU_display_other <- coast_AU_summary_no_WS_delist |>
 #   mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
 #                                .default = Rationale))
 
-AU_display <- AU_display_other
+AU_display <- AU_display_other |> 
+  mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
+                               .default = Rationale)) |> 
+  join_TMDL(type = 'AU')|> 
+  join_AU_info() |> 
+  relocate(prev_category, .after = year_last_assessed) |> 
+  relocate(prev_rationale, .after = prev_category) 
 
 if(write_excel){
   print("Writing excel doc")

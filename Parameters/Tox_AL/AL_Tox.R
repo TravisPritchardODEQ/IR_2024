@@ -91,11 +91,11 @@ tox_AL_Aluminum_WS_cats         <-  tox_AL_aluminum[["WS_Station_cat"]]
 tox_AL_Aluminum_GNIS_cat        <-  tox_AL_aluminum[["WS_GNIS_cat"]]
 
 
-tox_AL_Copper_data              <- Copper_categories[["data"]]
-tox_AL_Copper_AU_Decisions      <- Copper_categories[['AU_Decisions']]
-tox_AL_Copper_other_AU_cat      <- Copper_categories[["Other_AU_categorization"]]
-tox_AL_Copper_WS_cats           <- Copper_categories[["WS_Station_cat"]]
-tox_AL_Copper_GNIS_cat          <- Copper_categories[["WS_GNIS_cat"]]
+# tox_AL_Copper_data              <- Copper_categories[["data"]]
+# tox_AL_Copper_AU_Decisions      <- Copper_categories[['AU_Decisions']]
+# tox_AL_Copper_other_AU_cat      <- Copper_categories[["Other_AU_categorization"]]
+# tox_AL_Copper_WS_cats           <- Copper_categories[["WS_Station_cat"]]
+# tox_AL_Copper_GNIS_cat          <- Copper_categories[["WS_GNIS_cat"]]
 
 
 # Write excel doc -------------------------------------------------------------------------------------------------
