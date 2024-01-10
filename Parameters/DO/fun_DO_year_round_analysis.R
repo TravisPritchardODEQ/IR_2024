@@ -66,9 +66,9 @@ results_cont_summary_WS <- Results_spawndates %>%
 
 
 
-# Year-Round Continuous -------------------------------------------------------------------------------------------
+# Assessment function
 
-# Define year round continuous function --------------------------------------------------------------------------
+## Define year round continuous function --------------------------------------------------------------------------
 
 
 yr_round_cont_function <- function(df = Results_spawndates, continuous_list = results_cont_summary, AU_type){
@@ -442,16 +442,7 @@ yrround_cont_list <- list(data = as.data.frame(yr_round_cont_DO_data_analysis_ot
 
 }
 
-
-
-
- # Year Round instant ----------------------------------------------------------------------------------------------
-
-# Analyze year round criteria using instantaneous metrics
-print("Beginning instantaneous analysis")
-
-
-
+## Define year round instant function --------------------------------------------------------------------------
 
 yr_round_inst_function <- function(df = Results_spawndates, continuous_list = results_cont_summary, AU_type){
   
@@ -468,8 +459,8 @@ yr_round_inst_function <- function(df = Results_spawndates, continuous_list = re
     group2 <- c('AU_ID','Char_Name', 'MLocID','AU_GNIS_Name', 'GNIS_Name', 'Pollu_ID', 'wqstd_code',  'OWRD_Basin', 'DO_Class') 
     inverse <- FALSE
   }
-
-
+  
+  
   if(AU_type == "other"){ 
     
     instant_data_analysis <- Results_spawndates %>%
@@ -489,178 +480,212 @@ yr_round_inst_function <- function(df = Results_spawndates, continuous_list = re
   }
   
   
-instant_data_categories <- instant_data_analysis %>%
-  group_by_at(group1) %>%
-  summarise(num_samples = n(),
-            num_critical_samples = sum(is.crit),
-            num_below_crit = sum(Violation_crit)) %>%
-  mutate(critical_excursions = binomial_excursions(num_samples, type = "Conventionals")) %>%
-  mutate(IR_category = ifelse(num_critical_samples < 5 & 
-                                num_below_crit > 0, "Cat 3B", 
-                              ifelse(num_critical_samples < 5 & 
-                                       num_below_crit == 0, "Cat 3", 
-                                     ifelse(num_critical_samples >= 5 &
-                                              num_below_crit > critical_excursions &
-                                              DO_Class != "Cold Water", "Cat 5", 
-                                            ifelse(num_critical_samples >= 5 &
-                                                     num_below_crit > critical_excursions &
-                                                     DO_Class == "Cold Water", "Check percent Sat",
-                                                   ifelse(num_critical_samples >= 5 &
-                                                            num_below_crit <= critical_excursions, "Cat 2", "ERROR" ))))))
-
-
-# Data to be used to check percent saturation
-inst_perc_sat_check <- instant_data_analysis %>%
-  filter(AU_ID %in% unique(subset(instant_data_categories, IR_category == "Check percent Sat" )$AU_ID) ) 
-
-# vector of monitoring locations to check DO saturdation. Used for database query
-instant_mon_locs <- unique(inst_perc_sat_check$MLocID)
-
-
-
-print("querying the IR database to get data for DO sat calculations ")
-
-# Get DO and temp data from IR_database to calculate percent sat --------
-con <- DBI::dbConnect(odbc::odbc(), "IR_Dev")
-
-DOsat_AWQMS <- "SELECT [MLocID], [SampleStartDate],[SampleStartTime],[Statistical_Base],[IRResultNWQSunit] as DO_sat
+  instant_data_categories <- instant_data_analysis %>%
+    group_by_at(group1) %>%
+    summarise(num_samples = n(),
+              num_critical_samples = sum(is.crit),
+              num_below_crit = sum(Violation_crit)) %>%
+    mutate(critical_excursions = binomial_excursions(num_samples, type = "Conventionals")) %>%
+    mutate(IR_category = ifelse(num_critical_samples < 5 & 
+                                  num_below_crit > 0, "Cat 3B", 
+                                ifelse(num_critical_samples < 5 & 
+                                         num_below_crit == 0, "Cat 3", 
+                                       ifelse(num_critical_samples >= 5 &
+                                                num_below_crit > critical_excursions &
+                                                DO_Class != "Cold Water", "Cat 5", 
+                                              ifelse(num_critical_samples >= 5 &
+                                                       num_below_crit > critical_excursions &
+                                                       DO_Class == "Cold Water", "Check percent Sat",
+                                                     ifelse(num_critical_samples >= 5 &
+                                                              num_below_crit <= critical_excursions, "Cat 2", "ERROR" ))))))
+  
+  
+  # Data to be used to check percent saturation
+  inst_perc_sat_check <- instant_data_analysis %>%
+    filter(AU_ID %in% unique(subset(instant_data_categories, IR_category == "Check percent Sat" )$AU_ID) ) 
+  
+  # vector of monitoring locations to check DO saturdation. Used for database query
+  instant_mon_locs <- unique(inst_perc_sat_check$MLocID)
+  
+  
+  
+  print("querying the IR database to get data for DO sat calculations ")
+  
+  # Get DO and temp data from IR_database to calculate percent sat --------
+  con <- DBI::dbConnect(odbc::odbc(), "IR_Dev")
+  
+  DOsat_AWQMS <- "SELECT [MLocID], [SampleStartDate],[SampleStartTime],[Statistical_Base],[IRResultNWQSunit] as DO_sat
 FROM [IntegratedReport].[dbo].[ResultsRawWater]
 WHERE ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*}) AND Char_Name = 'Dissolved oxygen saturation') OR 
 ((Statistical_Base IS NULL) AND MLocID in ({instant_mon_locs*}) AND Char_Name = 'Dissolved oxygen saturation')"
-
-DOsat_from_AWQMS <-  glue::glue_sql(DOsat_AWQMS, .con = con)
-instant_perc_sat_AWQMS <- DBI::dbGetQuery(con, DOsat_from_AWQMS)
-
-# query DO data using instant_mon_locs as a monitoring location filter
-Doqry <- "SELECT * 
+  
+  DOsat_from_AWQMS <-  glue::glue_sql(DOsat_AWQMS, .con = con)
+  instant_perc_sat_AWQMS <- DBI::dbGetQuery(con, DOsat_from_AWQMS)
+  
+  # query DO data using instant_mon_locs as a monitoring location filter
+  Doqry <- "SELECT * 
 FROM            VW_DO
 WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})) OR  ((Statistical_Base IS NULL) AND MLocID in ({instant_mon_locs*}))"
-
-
-
-Doqry <- glue::glue_sql(Doqry, .con = con)
-
-instant_perc_sat_DO <- DBI::dbGetQuery(con, Doqry)
-
-
-
-# query temp data using instant_mon_locs as a monitoring location filter
-
-tempqry <- "SELECT * 
+  
+  
+  
+  Doqry <- glue::glue_sql(Doqry, .con = con)
+  
+  instant_perc_sat_DO <- DBI::dbGetQuery(con, Doqry)
+  
+  
+  
+  # query temp data using instant_mon_locs as a monitoring location filter
+  
+  tempqry <- "SELECT * 
 FROM            VW_Temp_4_DO
 WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})) OR  ((Statistical_Base IS NULL) AND MLocID in ({instant_mon_locs*}))"
-
-tempqry <- glue::glue_sql(tempqry, .con = con)
-
-instant_perc_sat_temp <-  DBI::dbGetQuery(con, tempqry)
-
-DBI::dbDisconnect(con)
-
-print("Finished database query")
-
-instant_perc_sat_temp_join <- instant_perc_sat_temp %>%
-  select(MLocID, Statistical_Base, IRResultNWQSunit, SampleStartDate, SampleStartTime, act_depth_height
-  ) %>%
-  rename(Temp_res = IRResultNWQSunit)
-
-
-
-instant_perc_sat_DO <- instant_perc_sat_DO %>%
-  left_join(instant_perc_sat_AWQMS, by =c('MLocID', 'SampleStartDate','SampleStartTime','Statistical_Base'  ))
-
-# Join DO and temp tables and calculate DO-Sat
-instant_DO_sat <- instant_perc_sat_DO %>%
-  rename(DO_res =  IRResultNWQSunit) %>%
-  left_join(instant_perc_sat_temp_join, by = c('MLocID', 'SampleStartDate', 'SampleStartTime', 'Statistical_Base', 'act_depth_height')) %>%
-  mutate(DO_sat = ifelse(is.na(DO_sat), DOSat_calc(DO_res, Temp_res, ELEV_Ft ),DO_sat))  %>%
-  mutate(DO_sat = ifelse(DO_sat > 100, 100, DO_sat )) %>%
-  select(MLocID, SampleStartDate, SampleStartTime, Statistical_Base, act_depth_height,DO_sat ) %>%
-  mutate(SampleStartDate = as.Date(parse_date_time(SampleStartDate, c("mdy", "ymd"))))
-
-
-#DATA
-
-#Join back in and recalculate violations
-# if do sat could not be calculated, then violation if IRResultNWQSunit < 30D criteria
-Instant_data_analysis_DOS <- instant_data_analysis %>%
-  filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
-  mutate(act_depth_height = as.character(act_depth_height)) %>%
-  filter(!AU_ID %in% results_cont_summary) %>%
-  filter(Statistical_Base %in% c("Minimum", NA)) %>%
-  left_join(instant_DO_sat, by = c('MLocID', 'SampleStartDate', 'SampleStartTime', 'Statistical_Base', 'act_depth_height')) %>%
-  mutate(Violation = case_when(DO_Class == "Cold Water" & IRResultNWQSunit < crit_Instant & (DO_sat < 90.0 | is.na(DO_sat)) ~ 1,
-                               DO_Class != "Cold Water" & IRResultNWQSunit < crit_30D ~ 1,
-                               TRUE ~ 0))
-
-
-
-# Reassign categories based on flow charts
-yr_round_instant_categories <- Instant_data_analysis_DOS %>%
-  group_by_at(group2) %>%
-  summarise(OWRD_Basin = first(OWRD_Basin), 
-            num_samples = n(),
-            num_critical_samples = sum(is.crit),
-            num_excursions = sum(Violation, na.rm = TRUE)) %>%
-  mutate(period = "year_round") %>%
-  mutate(critical_excursions =  binomial_excursions(num_samples, type = "Conventionals")) %>%
-  mutate(IR_category = case_when(num_critical_samples < req_inst_crit_samples & num_excursions > 0 ~ "3B",
-                                 num_critical_samples < req_inst_crit_samples & num_excursions == 0 ~ "3",
-                                 num_critical_samples >= req_inst_crit_samples & num_excursions >= critical_excursions ~ "5",
-                                 num_critical_samples >= req_inst_crit_samples & num_excursions < critical_excursions ~ "2",
-                                 TRUE ~ "ERROR"),
-         Rationale = case_when(num_critical_samples < req_inst_crit_samples & num_excursions > 0 ~ paste0("Insufficient data: ", num_critical_samples, 
-                                                                                      " samples in critical period is < 8 required. ",
-                                                                                      num_excursions, " total excursions. - ",
-                                                                                      num_samples, ' total samples.'),
-                               num_critical_samples < req_inst_crit_samples & num_excursions == 0 ~ paste0("Insufficient data: ", num_critical_samples, 
-                                                                                       " samples in critical period is < 8 required. ",
-                                                                                       num_excursions, " total excursions. - ",
-                                                                                       num_samples, ' total samples.'),
-                               num_critical_samples >= req_inst_crit_samples & num_excursions >= critical_excursions ~ paste0("Imapired: ", num_excursions, " excursions of criteria. ",
-                                                                                                          critical_excursions, " needed to list. - ",
-                                                                                                          num_samples, ' total samples.'),
-                               num_critical_samples >= req_inst_crit_samples & num_excursions < critical_excursions ~ paste0("Attaining: ", num_excursions, " excursions of criteria. ",
-                                                                                                         critical_excursions, " needed to list. - ",
-                                                                                                         num_samples, ' total samples.'),
-                               TRUE ~ "ERROR"))%>%
-  mutate(IR_category = factor(IR_category, levels=c("3", "3B", "2", "5" ), ordered=TRUE))
-
-
-yr_round_instant_categories <- join_prev_assessments_DO(yr_round_instant_categories, AU_type = AU_type)
-
-year_rd_inst_list <- list(data = Instant_data_analysis_DOS,
-                          categories =yr_round_instant_categories )
-
-
-return(year_rd_inst_list)
-
+  
+  tempqry <- glue::glue_sql(tempqry, .con = con)
+  
+  instant_perc_sat_temp <-  DBI::dbGetQuery(con, tempqry)
+  
+  DBI::dbDisconnect(con)
+  
+  print("Finished database query")
+  
+  instant_perc_sat_temp_join <- instant_perc_sat_temp %>%
+    select(MLocID, Statistical_Base, IRResultNWQSunit, SampleStartDate, SampleStartTime, act_depth_height
+    ) %>%
+    rename(Temp_res = IRResultNWQSunit)
+  
+  
+  
+  instant_perc_sat_DO <- instant_perc_sat_DO %>%
+    left_join(instant_perc_sat_AWQMS, by =c('MLocID', 'SampleStartDate','SampleStartTime','Statistical_Base'  ))
+  
+  # Join DO and temp tables and calculate DO-Sat
+  instant_DO_sat <- instant_perc_sat_DO %>%
+    rename(DO_res =  IRResultNWQSunit) %>%
+    left_join(instant_perc_sat_temp_join, by = c('MLocID', 'SampleStartDate', 'SampleStartTime', 'Statistical_Base', 'act_depth_height')) %>%
+    mutate(DO_sat = ifelse(is.na(DO_sat), DOSat_calc(DO_res, Temp_res, ELEV_Ft ),DO_sat))  %>%
+    mutate(DO_sat = ifelse(DO_sat > 100, 100, DO_sat )) %>%
+    select(MLocID, SampleStartDate, SampleStartTime, Statistical_Base, act_depth_height,DO_sat ) %>%
+    mutate(SampleStartDate = as.Date(parse_date_time(SampleStartDate, c("mdy", "ymd")))) |> 
+    group_by(MLocID, SampleStartDate, SampleStartTime , Statistical_Base, act_depth_height) |> 
+    filter(row_number() == 1)
+  
+  
+  #DATA
+  
+  #Join back in and recalculate violations
+  # if do sat could not be calculated, then violation if IRResultNWQSunit < 30D criteria
+  Instant_data_analysis_DOS <- instant_data_analysis %>%
+    filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
+    mutate(act_depth_height = as.character(act_depth_height)) %>%
+    filter(!AU_ID %in% results_cont_summary) %>%
+    filter(Statistical_Base %in% c("Minimum", NA)) %>%
+    left_join(instant_DO_sat, by = c('MLocID', 'SampleStartDate', 'SampleStartTime', 'Statistical_Base', 'act_depth_height')) %>%
+    mutate(Violation = case_when(DO_Class == "Cold Water" & IRResultNWQSunit < crit_Instant & (DO_sat < 90.0 | is.na(DO_sat)) ~ 1,
+                                 DO_Class != "Cold Water" & IRResultNWQSunit < crit_30D ~ 1,
+                                 TRUE ~ 0))
+  
+  
+  
+  # Reassign categories based on flow charts
+  yr_round_instant_categories <- Instant_data_analysis_DOS %>%
+    left_join(year_round_delist_eligability, relationship = "many-to-many") |> 
+    group_by_at(group2) %>%
+    summarise(OWRD_Basin = first(OWRD_Basin), 
+              num_samples = n(),
+              num_critical_samples = sum(is.crit),
+              num_excursions = sum(Violation, na.rm = TRUE),
+              Delist_eligability = max(Delist_eligability)) %>%
+    mutate(period = "year_round") %>%
+    mutate(critical_excursions =  binomial_excursions(num_samples, type = "Conventionals")) %>%
+    mutate(IR_category = case_when(num_critical_samples < req_inst_crit_samples & num_excursions > 0 ~ "3B",
+                                   num_critical_samples < req_inst_crit_samples & num_excursions == 0 ~ "3",
+                                   num_critical_samples >= req_inst_crit_samples & num_excursions >= critical_excursions ~ "5",
+                                   num_critical_samples >= req_inst_crit_samples & num_excursions < critical_excursions ~ "2",
+                                   TRUE ~ "ERROR"),
+           Rationale = case_when(num_critical_samples < req_inst_crit_samples & num_excursions > 0 ~ paste0("Insufficient data: ", num_critical_samples, 
+                                                                                                            " samples in critical period is < 8 required. ",
+                                                                                                            num_excursions, " total excursions. - ",
+                                                                                                            num_samples, ' total samples.'),
+                                 num_critical_samples < req_inst_crit_samples & num_excursions == 0 ~ paste0("Insufficient data: ", num_critical_samples, 
+                                                                                                             " samples in critical period is < 8 required. ",
+                                                                                                             num_excursions, " total excursions. - ",
+                                                                                                             num_samples, ' total samples.'),
+                                 num_critical_samples >= req_inst_crit_samples & num_excursions >= critical_excursions ~ paste0("Impaired: ", num_excursions, " excursions of criteria. ",
+                                                                                                                                critical_excursions, " needed to list. - ",
+                                                                                                                                num_samples, ' total samples.'),
+                                 num_critical_samples >= req_inst_crit_samples & num_excursions < critical_excursions ~ paste0("Attaining: ", num_excursions, " excursions of criteria. ",
+                                                                                                                               critical_excursions, " needed to list. - ",
+                                                                                                                               num_samples, ' total samples.'),
+                                 TRUE ~ "ERROR"))%>%
+    mutate(IR_category = factor(IR_category, levels=c("3", "3B", "2", "5" ), ordered=TRUE))
+  
+  
+  
+  year_rd_inst_list <- list(data = Instant_data_analysis_DOS,
+                            categories =yr_round_instant_categories )
+  
+  
+  return(year_rd_inst_list)
+  
 }
 
+# Run year round continuous function ---------------------------------------------------------------------------
+
+print("Beginning continuous analysis")
 
 
+## year round continuous- other ------------------------------------------------------------------------------------
 
 
-# Run the year round continuous function --------------------------------------------------------------------------
-print("Begin year round continuous")
-print("Begin year round continuous- Others")
 year_round_cont_other <- yr_round_cont_function(df, AU_type = "other")
+
 
 year_round_cont_other_data <- year_round_cont_other[['data']]
 
 year_round_cont_other_categories <- year_round_cont_other[['AU_categories']] %>%
   mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID), "-",Pollu_ID,"-", wqstd_code,"-", period ))
 
+# other_category_cont <- join_prev_assessments(year_round_cont_other_categories, AU_type = 'Other')
+# 
+# other_category_delist_cont <-  assess_delist(other_category_cont, type = "Other") |> 
+#   mutate(Char_Name = 'Dissolved oxygen (DO)') 
+
+
+
+## Year round continuous- WS ---------------------------------------------------------------------------------------
+
 print("Begin year round continuous- WS")
 year_round_cont_WS <- yr_round_cont_function(df, continuous_list = results_cont_summary_WS, AU_type = "WS")
 year_round_cont_WS_data <- year_round_cont_WS[['data']]
-year_round_cont_WS_categories <- year_round_cont_WS[['AU_categories']]
+WS_categories_cont <- year_round_cont_WS[['AU_categories']] %>%
+  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID), "-",Pollu_ID,"-", wqstd_code,"-", period ))
 
 
-# Run the year round instant function -----------------------------------------------------------------------------
+
+WS_GNIS_rollup_cont <- WS_categories_cont %>%
+  mutate(Char_Name = 'Dissolved oxygen (DO)') |> 
+  ungroup() %>%
+  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
+  summarise(IR_category_GNIS_24 = max(IR_category),
+            Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
+            Delist_eligability = max(Delist_eligability)) %>% 
+  mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
+                                        TRUE ~ 0)) |> 
+  mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', "3", "3B", "2", "5" ), ordered=TRUE)) |> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
 
 
-print("Begin year round instant")
-print("Begin year round instant- Others")
+
+
+# Run year round instant function ---------------------------------------------------------------------------
+
+print("Beginning instantaneous analysis")
+
+
+## Run the year round instant function on other units -------------------------------------------------------------
+
+
 year_round_inst_other <- yr_round_inst_function(df = Results_spawndates, AU_type = "other")
 
 year_round_inst_other_data <- year_round_inst_other[['data']]
@@ -668,10 +693,45 @@ year_round_inst_other_data <- year_round_inst_other[['data']]
 year_round_inst_other_categories <- year_round_inst_other[['categories']] %>%
   mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID), "-",Pollu_ID,"-", wqstd_code,"-", period ))
 
-print("Begin year round instant- WS")
+# 
+# other_category_inst <- join_prev_assessments(year_round_inst_other_categories, AU_type = 'Other') 
+# 
+# other_category_delist_inst <-  assess_delist(other_category_inst, type = "Other")
+
+## Run the year round instant function on WS units -----------------------------------------------------------
+
 year_round_inst_WS <- yr_round_inst_function(df, continuous_list = results_cont_summary_WS, AU_type = "WS")
 year_round_inst_WS_data <- year_round_inst_WS[['data']]
-year_round_inst_WS_categories <- year_round_inst_WS[['categories']]
+WS_categories_inst <- year_round_inst_WS[['categories']]%>%
+  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID), "-",Pollu_ID,"-", wqstd_code,"-", period ))
+
+
+
+WS_GNIS_rollup_inst <- WS_categories_inst %>%
+  mutate(Char_Name = 'Dissolved oxygen (DO)') |> 
+  ungroup() %>%
+  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
+  summarise(IR_category_GNIS_24 = max(IR_category),
+            Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
+            Delist_eligability = max(Delist_eligability)) %>% 
+  mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
+                                        TRUE ~ 0)) |> 
+  mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', "3", "3B", "2", "5" ), ordered=TRUE)) |> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
+
+# WS_GNIS_rollup_inst <- join_prev_assessments(WS_GNIS_rollup_inst, AU_type = "WS") |> 
+#   mutate(Char_Name = 'Dissolved oxygen (DO)') 
+### Delist process --------------------------------------------------------------------------------------------------
+
+# 
+# WS_GNIS_rollup_delist_inst <- assess_delist(WS_GNIS_rollup_inst, type = 'WS')
+
+
+## AU Rollup -------------------------------------------------------------------------------------------------------
+
+# 
+# WS_AU_rollup_inst <- rollup_WS_AU(WS_GNIS_rollup_delist_inst, char_name_field = Char_Name)
+
 
 
 
@@ -679,69 +739,110 @@ year_round_inst_WS_categories <- year_round_inst_WS[['categories']]
 
 # Data combine ----------------------------------------------------------------------------------------------------
 
-cont_data_combined <- bind_rows(year_round_cont_WS_data, year_round_cont_other_data)
+## Combine assessment data ----------------------------------------------------------------------------------------
 
-inst_data_combined <- bind_rows(year_round_inst_WS_data, year_round_inst_other_data) %>%
-  select(-crit_30D, -crit_7Mi, -crit_Min)
-# Year round WS unit rollup ---------------------------------------------------------------------------------------
+# Combine mloc ----------------------------------------------------------------------------------------------------
 
-
-
-WS_AU_rollup_year_round <- year_round_inst_WS_categories %>%
-  select(AU_ID, MLocID, GNIS_Name, Pollu_ID, wqstd_code,  OWRD_Basin,DO_Class, period, IR_category, Rationale) %>%
-  bind_rows(select(year_round_cont_WS_categories, AU_ID, Pollu_ID, wqstd_code,  OWRD_Basin,DO_Class, period, IR_category, Rationale)) %>%
-  ungroup() %>%
-  #mutate(Rationale = past0(MLocID, ))
-  group_by(AU_ID, Pollu_ID, wqstd_code,  OWRD_Basin,DO_Class, period) %>%
-  summarise(IR_category_AU = max(IR_category),
-            Rationale_AU = str_c(MLocID, ": ", Rationale, collapse =  " ~ " ) ) %>%
-  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))
-
-WS_AU_rollup_year_round <- join_prev_assessments_DO(WS_AU_rollup_year_round, AU_type = "Other")
+WS_categories <- bind_rows(WS_categories_cont, WS_categories_inst)
 
 
-if(write_excel){
+# Combine GNIS ----------------------------------------------------------------------------------------------------
+
+WS_GNIS_rollup <- bind_rows(WS_GNIS_rollup_cont, WS_GNIS_rollup_inst)
+WS_GNIS_rollup <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")
+
+
+## Delist process --------------------------------------------------------------------------------------------------
+
+
+WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')
+
+
+## AU Rollup -------------------------------------------------------------------------------------------------------
+
+
+WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup, char_name_field = Char_Name)
+
+
+
+# Combine AU decisions --------------------------------------------------------------------------------------------
+Other_categories <- bind_rows(year_round_inst_other_categories, year_round_cont_other_categories)
+other_category <- join_prev_assessments(Other_categories, AU_type = 'Other')
+
+other_category_delist <-  assess_delist(other_category, type = "Other")
+
+# prep data for export --------------------------------------------------------------------------------------------
+
+AU_display_other <- other_category_delist |> 
+  select(AU_ID, Char_Name,  Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+
+AU_display_ws <- WS_AU_rollup |> 
+  rename(prev_category = prev_AU_category,
+         prev_rationale = prev_AU_rationale,
+         final_AU_cat = IR_category_AU_24,
+         Rationale = Rationale_AU)
+
+AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
+  mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
+                               .default = Rationale))|> 
+  join_TMDL(type = 'AU')|> 
+  join_AU_info() |> 
+  relocate(prev_category, .after = year_last_assessed) |> 
+  relocate(prev_rationale, .after = prev_category) |> 
+  mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
+                                        .default = year_last_assessed)) |> 
+  mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
+                                 .default = Year_listed)) |> 
+  mutate(Char_Name = 'Dissolved oxygen (DO)')
+
+
+
+WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |> 
+  join_TMDL(type = 'GNIS') |> 
+  join_AU_info()|> 
+  relocate(Rationale_GNIS, .after = final_GNIS_cat) |> 
+  relocate(prev_GNIS_category, .after = Rationale_GNIS) |> 
+  relocate(prev_GNIS_rationale, .after = prev_GNIS_category)  |> 
+  mutate(Char_Name = 'Dissolved oxygen (DO)')
+
+if(write_xlsx){
+  
+  
   
   wb <- createWorkbook()
-
-  addWorksheet(wb, sheetName = "Yr Rnd Cont Data")
-  addWorksheet(wb, sheetName = "Yr Rnd Instant Data")
-
-  addWorksheet(wb, sheetName = "Yr Rnd Cont WS Station Cat")
-  addWorksheet(wb, sheetName = "Yr Rnd Cont Other AU Cat")
   
-  addWorksheet(wb, sheetName = "Yr Rnd Instant WS Station Cat")
-  addWorksheet(wb, sheetName = "Yr Rnd Instant Other AU Cat")
+  addWorksheet(wb, sheetName = "AU_Decisions", tabColour = 'forestgreen')
   
-  addWorksheet(wb, sheetName = "Yr Rnd WS AU combined Cat")
+  addWorksheet(wb, sheetName = "Other_AU_categorization",tabColour = 'dodgerblue3')
+  addWorksheet(wb, sheetName = "WS station categorization", tabColour = 'lightblue3')
+  addWorksheet(wb, sheetName = "WS GNIS categorization", tabColour = 'lightyellow1')
+  
+  addWorksheet(wb, sheetName = "DO WS Data Inst",     tabColour = 'paleturquoise2')
+  addWorksheet(wb, sheetName = "DO WS Data Cont",     tabColour = 'paleturquoise2')
+  addWorksheet(wb, sheetName = "DO Other Data Inst",  tabColour = 'paleturquoise2')
+  addWorksheet(wb, sheetName = "DO Other Data Cont",  tabColour = 'paleturquoise2')
   
   
   header_st <- createStyle(textDecoration = "Bold", border = "Bottom")
   
-  freezePane(wb, "Yr Rnd Cont Data", firstRow = TRUE) 
-  freezePane(wb, "Yr Rnd Instant Data", firstRow = TRUE) 
- 
-  freezePane(wb, "Yr Rnd Cont WS Station Cat", firstRow = TRUE) 
-  freezePane(wb, "Yr Rnd Cont Other AU Cat", firstRow = TRUE) 
-  freezePane(wb, "Yr Rnd Instant WS Station Cat", firstRow = TRUE) 
-  freezePane(wb, "Yr Rnd Instant Other AU Cat", firstRow = TRUE) 
-  freezePane(wb, "Yr Rnd WS AU combined Cat", firstRow = TRUE) 
+  writeData(wb = wb, sheet = "AU_Decisions", x = AU_display, headerStyle = header_st)
+  
+  writeData(wb = wb, sheet = "Other_AU_categorization", x = other_category_delist, headerStyle = header_st)
+  writeData(wb = wb, sheet = "WS station categorization", x = WS_categories, headerStyle = header_st)
+  writeData(wb = wb, sheet = "WS GNIS categorization", x = WS_GNIS_rollup_delist, headerStyle = header_st)
   
   
-  writeData(wb, "Yr Rnd Cont Data", x = cont_data_combined, headerStyle = header_st) 
-  writeData(wb, "Yr Rnd Instant Data", x = inst_data_combined, headerStyle = header_st) 
-  
-  writeData(wb, "Yr Rnd Cont WS Station Cat", x= year_round_cont_WS_categories,  headerStyle = header_st) 
-  writeData(wb, "Yr Rnd Cont Other AU Cat", x = year_round_cont_other_categories, headerStyle = header_st) 
-  writeData(wb, "Yr Rnd Instant WS Station Cat", x = year_round_inst_WS_categories, headerStyle = header_st) 
-  writeData(wb, "Yr Rnd Instant Other AU Cat", x= year_round_inst_other_categories, headerStyle = header_st) 
-  writeData(wb, "Yr Rnd WS AU combined Cat", x = WS_AU_rollup_year_round, headerStyle = header_st) 
+  writeData(wb = wb, sheet = "DO WS Data Inst",    x = year_round_inst_WS_data, headerStyle = header_st )
+  writeData(wb = wb, sheet = "DO WS Data Cont",    x = year_round_cont_other_data, headerStyle = header_st )
+  writeData(wb = wb, sheet = "DO Other Data Inst", x = year_round_inst_other_data, headerStyle = header_st )
+  writeData(wb = wb, sheet = "DO Other Data Cont", x = year_round_cont_other_data, headerStyle = header_st )
   
   print("Writing excel doc")
-  saveWorkbook(wb, "Parameters/Outputs/DO Year Round.xlsx", overwrite = TRUE) 
-  
+  saveWorkbook(wb, paste0("Parameters/Outputs/DO Yearround-",Sys.Date(), ".xlsx"), overwrite = TRUE) 
   
 }
+
 
 DO_year_round <- list(Yr_Rnd_cont_data = cont_data_combined,
                       Yr_Rnd_inst_data = inst_data_combined,
