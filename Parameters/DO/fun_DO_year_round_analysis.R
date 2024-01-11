@@ -87,6 +87,7 @@ yr_round_cont_function <- function(df = Results_spawndates, continuous_list = re
 if(AU_type == "other"){  
 group1 <- c('AU_ID', 'DO_Class')
 group2 <- c('AU_ID', 'Pollu_ID', 'wqstd_code',  'DO_Class')
+group3 <- c('AU_ID', 'Pollu_ID', 'wqstd_code', 'period')
 inverse <- TRUE
 query_type = 'AU_ID'
 
@@ -94,7 +95,8 @@ query_type = 'AU_ID'
 
 } else if (AU_type == "WS"){
   group1 <- c('AU_ID', 'MLocID', 'DO_Class')
-  group2 <- c('AU_ID', 'MLocID','AU_GNIS_Name', 'GNIS_Name', 'Pollu_ID', 'wqstd_code',  'OWRD_Basin', 'DO_Class') 
+  group2 <- c('AU_ID', 'MLocID','AU_GNIS_Name', 'GNIS_Name', 'Pollu_ID', 'wqstd_code','DO_Class') 
+  group3 <- c('AU_ID', 'MLocID','AU_GNIS_Name', 'GNIS_Name', 'Pollu_ID', 'wqstd_code', 'period') 
   inverse <- FALSE
   query_type = 'MLocID'
 }
@@ -435,9 +437,21 @@ yr_round_cont_data_categories_other <- yr_round_cont_DO_data_analysis_other %>%
   mutate(IR_category = factor(IR_category, levels=c("3", "3B", "2", "5" ), ordered=TRUE)) 
 
 
+yr_round_cont_categories_class <- yr_round_cont_data_categories_other |>
+  mutate(Rationale = paste0(DO_Class, ": ", Rationale)) |> 
+  group_by_at(group3) |> 
+  summarise(Total_excursions = sum(Total_excursions),
+            Sum_30D_excursions = sum(Sum_30D_excursions),
+            Sum_7mi_excursions = sum(Sum_7mi_excursions),
+            Sum_abs_min_excursions = sum(Sum_abs_min_excursions),
+            Delist_eligability = max(Delist_eligability),
+            IR_category = max(IR_category),
+            Rationale = str_c(Rationale,collapse =  " ~ " )
+  ) 
+
            
 yrround_cont_list <- list(data = as.data.frame(yr_round_cont_DO_data_analysis_other),
-                          AU_categories = yr_round_cont_data_categories_other)
+                          AU_categories = yr_round_cont_categories_class)
            
 
 }
@@ -451,12 +465,14 @@ yr_round_inst_function <- function(df = Results_spawndates, continuous_list = re
   if(AU_type == "other"){  
     group1 <- c('AU_ID','Char_Name',  'DO_Class')
     group2 <- c('AU_ID','Char_Name', 'Pollu_ID', 'wqstd_code', 'DO_Class')
+    group3 <- c("AU_ID", 'Char_Name','period', 'Pollu_ID', 'wqstd_code')
     inverse <- TRUE
     
     
   } else if (AU_type == "WS"){
     group1 <- c('AU_ID','Char_Name', 'MLocID', 'DO_Class')
     group2 <- c('AU_ID','Char_Name', 'MLocID','AU_GNIS_Name', 'GNIS_Name', 'Pollu_ID', 'wqstd_code',  'OWRD_Basin', 'DO_Class') 
+    group3 <- c("AU_ID", 'Char_Name','MLocID','AU_GNIS_Name', 'GNIS_Name','period', 'Pollu_ID', 'wqstd_code')
     inverse <- FALSE
   }
   
@@ -621,9 +637,21 @@ WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})
     mutate(IR_category = factor(IR_category, levels=c("3", "3B", "2", "5" ), ordered=TRUE))
   
   
+  yr_round_instant_categories_class <- yr_round_instant_categories |>
+    mutate(Rationale = paste0(DO_Class, ": ", Rationale)) |> 
+    group_by_at(group3) |> 
+    summarise(num_samples = sum(num_samples),
+              num_critical_samples = sum(num_critical_samples),
+              num_excursions = sum(num_excursions),
+              critical_excursions = sum(critical_excursions),
+              Delist_eligability = max(Delist_eligability),
+              IR_category = max(IR_category),
+              Rationale = str_c(Rationale,collapse =  " ~ " )
+              ) 
+  
   
   year_rd_inst_list <- list(data = Instant_data_analysis_DOS,
-                            categories =yr_round_instant_categories )
+                            categories =yr_round_instant_categories_class )
   
   
   return(year_rd_inst_list)
@@ -665,6 +693,7 @@ WS_categories_cont <- year_round_cont_WS[['AU_categories']] %>%
 
 WS_GNIS_rollup_cont <- WS_categories_cont %>%
   mutate(Char_Name = 'Dissolved oxygen (DO)') |> 
+  mutate(Rationale = paste0(MLocID, ": ", Rationale)) |> 
   ungroup() %>%
   group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
   summarise(IR_category_GNIS_24 = max(IR_category),
@@ -691,7 +720,7 @@ year_round_inst_other <- yr_round_inst_function(df = Results_spawndates, AU_type
 year_round_inst_other_data <- year_round_inst_other[['data']]
 
 year_round_inst_other_categories <- year_round_inst_other[['categories']] %>%
-  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID), "-",Pollu_ID,"-", wqstd_code,"-", period ))
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID), "-",Pollu_ID,"-", wqstd_code,"-", period ))
 
 # 
 # other_category_inst <- join_prev_assessments(year_round_inst_other_categories, AU_type = 'Other') 
@@ -709,6 +738,7 @@ WS_categories_inst <- year_round_inst_WS[['categories']]%>%
 
 WS_GNIS_rollup_inst <- WS_categories_inst %>%
   mutate(Char_Name = 'Dissolved oxygen (DO)') |> 
+  mutate(Rationale = paste0(MLocID, ": ", Rationale)) |> 
   ungroup() %>%
   group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
   summarise(IR_category_GNIS_24 = max(IR_category),
@@ -755,13 +785,14 @@ WS_GNIS_rollup <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")
 ## Delist process --------------------------------------------------------------------------------------------------
 
 
-WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')
+WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS') |> 
+  mutate(Char_Name = 'Dissolved oxygen (DO)')
 
 
 ## AU Rollup -------------------------------------------------------------------------------------------------------
 
 
-WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup, char_name_field = Char_Name)
+WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup_delist, char_name_field = Char_Name)
 
 
 
@@ -806,6 +837,10 @@ WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |>
   relocate(prev_GNIS_rationale, .after = prev_GNIS_category)  |> 
   mutate(Char_Name = 'Dissolved oxygen (DO)')
 
+
+Yr_Rnd_cont_data <- bind_rows(year_round_cont_other_data, year_round_cont_WS_data)
+Yr_Rnd_inst_data <- bind_rows(year_round_inst_other_data, year_round_inst_WS_data)
+
 if(write_xlsx){
   
   
@@ -818,10 +853,9 @@ if(write_xlsx){
   addWorksheet(wb, sheetName = "WS station categorization", tabColour = 'lightblue3')
   addWorksheet(wb, sheetName = "WS GNIS categorization", tabColour = 'lightyellow1')
   
-  addWorksheet(wb, sheetName = "DO WS Data Inst",     tabColour = 'paleturquoise2')
-  addWorksheet(wb, sheetName = "DO WS Data Cont",     tabColour = 'paleturquoise2')
-  addWorksheet(wb, sheetName = "DO Other Data Inst",  tabColour = 'paleturquoise2')
-  addWorksheet(wb, sheetName = "DO Other Data Cont",  tabColour = 'paleturquoise2')
+  addWorksheet(wb, sheetName = "DO Year Round Data Inst",     tabColour = 'paleturquoise2')
+  addWorksheet(wb, sheetName = "DO Year Round Data Cont",     tabColour = 'paleturquoise2')
+
   
   
   header_st <- createStyle(textDecoration = "Bold", border = "Bottom")
@@ -833,10 +867,9 @@ if(write_xlsx){
   writeData(wb = wb, sheet = "WS GNIS categorization", x = WS_GNIS_rollup_delist, headerStyle = header_st)
   
   
-  writeData(wb = wb, sheet = "DO WS Data Inst",    x = year_round_inst_WS_data, headerStyle = header_st )
-  writeData(wb = wb, sheet = "DO WS Data Cont",    x = year_round_cont_other_data, headerStyle = header_st )
-  writeData(wb = wb, sheet = "DO Other Data Inst", x = year_round_inst_other_data, headerStyle = header_st )
-  writeData(wb = wb, sheet = "DO Other Data Cont", x = year_round_cont_other_data, headerStyle = header_st )
+  writeData(wb = wb, sheet = "DO Year Round Data Inst",   x = Yr_Rnd_inst_data, headerStyle = header_st )
+  writeData(wb = wb, sheet = "DO Year Round Data Cont",   x = Yr_Rnd_cont_data, headerStyle = header_st )
+
   
   print("Writing excel doc")
   saveWorkbook(wb, paste0("Parameters/Outputs/DO Yearround-",Sys.Date(), ".xlsx"), overwrite = TRUE) 
@@ -844,14 +877,14 @@ if(write_xlsx){
 }
 
 
-DO_year_round <- list(Yr_Rnd_cont_data = cont_data_combined,
-                      Yr_Rnd_inst_data = inst_data_combined,
-                      Yr_Rnd_cont_WS_station_cat = year_round_cont_WS_categories,
-                      Yr_Rnd_cont_Other_AU_Cat = year_round_cont_other_categories,
-                      Yr_Rnd_inst_WS_station_cat = year_round_inst_WS_categories,
-                      Yr_Rnd_inst_Other_AU_cat = year_round_inst_other_categories, 
-                      Yr_Rnd_combined_WS_AU_cat = WS_AU_rollup_year_round)
-
-return(DO_year_round)
+# DO_year_round <- list(Yr_Rnd_cont_data = cont_data_combined,
+#                       Yr_Rnd_inst_data = inst_data_combined,
+#                       Yr_Rnd_cont_WS_station_cat = year_round_cont_WS_categories,
+#                       Yr_Rnd_cont_Other_AU_Cat = year_round_cont_other_categories,
+#                       Yr_Rnd_inst_WS_station_cat = year_round_inst_WS_categories,
+#                       Yr_Rnd_inst_Other_AU_cat = year_round_inst_other_categories, 
+#                       Yr_Rnd_combined_WS_AU_cat = WS_AU_rollup_year_round)
+# 
+# return(DO_year_round)
 
 }
