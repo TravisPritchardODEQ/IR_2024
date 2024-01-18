@@ -136,7 +136,7 @@ TOX_AL_penta_analysis <- function(df, database = "IR_Dev"){
   # prep data for export --------------------------------------------------------------------------------------------
   
   AU_display_other <- other_category_delist |> 
-    select(AU_ID, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+    select(AU_ID,Char_Name,  Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
            final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
   
   AU_display_ws <- WS_AU_rollup |> 

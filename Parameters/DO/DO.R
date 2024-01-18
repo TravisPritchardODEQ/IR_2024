@@ -56,7 +56,7 @@ wb <- createWorkbook()
 
 addWorksheet(wb, sheetName = "AU_Decisions", tabColour = 'forestgreen')
 
-addWorksheet(wb, sheetName = "Other_AU_categorization",tabColour = 'dodgerblue3')
+addWorksheet(wb, sheetName = "Other_AU_categorization"   ,tabColour = 'dodgerblue3' )
 addWorksheet(wb, sheetName = "WS station categorization", tabColour = 'lightblue3')
 addWorksheet(wb, sheetName = "WS GNIS categorization", tabColour = 'lightyellow1')
 

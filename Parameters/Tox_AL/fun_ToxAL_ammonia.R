@@ -12,14 +12,18 @@ ToxAL_Ammonia <- function(database){
   #open connection to database
   con <- DBI::dbConnect(odbc::odbc(), database)
   
-  #Build query language to get Pentachlorophenol data out. this grabs the IR 2018 db view [dbo].[VW_Pentachlorophenol]
+  #Build query language to get ammonia data out. this grabs the IR 2018 db view [dbo].[VW_Ammonia_AL]
   
-  db_qry <- glue::glue_sql( "SELECT *
-                          FROM [IntegratedReport].[dbo].[VW_Ammonia_AL]
-                          WHERE AU_ID != '99'", .con = con)
+  # db_qry <- glue::glue_sql( "SELECT *
+  #                         FROM [IntegratedReport].[dbo].[VW_Ammonia_AL]
+  #                         WHERE AU_ID != '99'", .con = con)
+  # 
+  # # Send query to database and return with the data
+  # Results_import <-  DBI::dbGetQuery(con, db_qry)
   
-  # Send query to database and return with the data
-  Results_import <-  DBI::dbGetQuery(con, db_qry)
+  Results_import <- tbl(con, 'VW_Ammonia_AL') |> 
+    filter(AU_ID != '99') |> 
+    collect()
   
   Results_import_no_NAs <- Results_import %>%
     filter(!is.na(MLocID))
@@ -210,7 +214,8 @@ ToxAL_Ammonia <- function(database){
   # Other assessment ------------------------------------------------------------------------------------------------
   
   AL_tox_Ammonia_other <- ammonia_cat_fun(Results_censored = Results_censored,AU_type = "other" )  |> 
-    mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
+    mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period )) |> 
+    ungroup()
   
   other_category <- join_prev_assessments(AL_tox_Ammonia_other, AU_type = 'Other')|> 
     select(-Char_Name) |> 
