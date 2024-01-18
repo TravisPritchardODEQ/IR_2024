@@ -1,6 +1,6 @@
 ## L.Merrick 8/5/2021 
 #function to assess continuous data using the ten-ten 
-#modifued By Rravis Pritchard to fit the IR process
+#modifued By Travis Pritchard to fit the IR process
 
 
 
@@ -300,7 +300,7 @@ pH_assessment <- function(cont_data, grab_data, write_xlsx = TRUE){
     mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
                                           .default = year_last_assessed)) |> 
     mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
-                                   .default = year_last_assessed)) 
+                                   .default = NA_character_)) 
   
 
   

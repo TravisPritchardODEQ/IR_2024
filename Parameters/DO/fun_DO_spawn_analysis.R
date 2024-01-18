@@ -2,124 +2,15 @@ library(zoo)
 
 fun_DO_spawn <- function(df, write_excel = TRUE ){
   
-  
-  
-  join_prev_assessments_DO <- function(df, AU_type){
-    
-    # test dataset ----------------------------------------------------------------------------------------------------
-    
-    #  df <- yr_round_instant_categories
-    # AU_type <- "Other"
-    
-    if(AU_type == "WS"){
-      
-      
-      df_names <- names(df)
-      
-      WS_GNIS_previous_listings_DO <- WS_GNIS_previous_listings %>%
-        filter(Pollu_ID == '154') %>%
-        separate(Char_Name, c("Char_Name", "DO_Class"), sep = " - ")
-      
-      WS_GNIS_previous_listings_DO_class <-  WS_GNIS_previous_listings_DO %>%
-        filter(!is.na(DO_Class)) %>%
-        rename(GNIS_previous_IR_impairement_class = GNIS_previous_IR_impairement)
-      
-      WS_GNIS_previous_listings_DO_class_no_class <-  WS_GNIS_previous_listings_DO %>%
-        filter(is.na(DO_Class)) %>%
-        select(-DO_Class) %>%
-        rename(GNIS_previous_IR_impairement_no_class = GNIS_previous_IR_impairement)
-      
-      GNIS_join <- df %>%
-        mutate(Char_Name = "Dissolved Oxygen") %>%
-        ungroup() %>%
-        #select(-Char_Name) %>%
-        mutate(AU_GNIS = str_c(AU_ID, AU_GNIS_Name, sep = ";"),
-               Pollu_ID = as.character(Pollu_ID),
-               wqstd_code = as.character(wqstd_code)) %>%
-        left_join(WS_GNIS_previous_listings) %>%
-        select(all_of(df_names), GNIS_previous_IR_impairement) 
-      
-      GNIS_join_names <- names(GNIS_join)
-      AU_previous_categories <- distinct(AU_previous_categories)
-      
-      AU_previous_categories_DO <- AU_previous_categories %>%
-        filter(Pollu_ID == '154') %>%
-        separate(Char_Name, c("Char_Name", "DO_Class"), sep = " - ")
-      
-      AU_previous_categories_DO_class <- AU_previous_categories_DO %>%
-        filter(!is.na(DO_Class)) %>%
-        rename(AU_previous_IR_category_class = AU_previous_IR_category)
-      
-      
-      AU_previous_categories_DO_class_no_class <-  AU_previous_categories_DO %>%
-        filter(is.na(DO_Class)) %>%
-        select(-DO_Class) %>%
-        rename(AU_previous_IR_category_no_class = AU_previous_IR_category)
-      
-      overall_join <- GNIS_join %>%
-        ungroup() %>%
-        mutate(Char_Name = "Dissolved Oxygen") %>%
-        #select(-Char_Name) %>%
-        left_join(AU_previous_categories_DO_class)%>%
-        #select(-Char_Name) %>%
-        left_join(AU_previous_categories_DO_class_no_class) %>%
-        mutate(AU_previous_IR_category = case_when(!is.na(AU_previous_IR_category_class) ~ AU_previous_IR_category_class,
-                                                   !is.na(AU_previous_IR_category_no_class) ~ AU_previous_IR_category_no_class)) %>%
-        select(all_of(GNIS_join_names), AU_previous_IR_category)
-      
-      
-    } else {
-      
-      # non-watershed ---------------------------------------------------------------------------------------------------
-      
-      
-      df_names <- names(df)
-      
-      
-      AU_previous_categories_DO <- AU_previous_categories %>%
-        filter(Pollu_ID == '154') %>%
-        separate(Char_Name, c("Char_Name", "DO_Class"), sep = " - ")
-      
-      AU_previous_categories_DO_class <- AU_previous_categories_DO %>%
-        filter(!is.na(DO_Class)) %>%
-        rename(AU_previous_IR_category_class = AU_previous_IR_category)
-      
-      
-      AU_previous_categories_DO_class_no_class <-  AU_previous_categories_DO %>%
-        filter(is.na(DO_Class)) %>%
-        select(-DO_Class) %>%
-        rename(AU_previous_IR_category_no_class = AU_previous_IR_category)
-      
-      overall_join <- df %>%
-        ungroup() %>%
-        mutate(Char_Name = "Dissolved Oxygen") %>%
-        mutate(Pollu_ID = as.character(Pollu_ID),
-               wqstd_code = as.character(wqstd_code),
-               assess_char = paste(Char_Name, "-", DO_Class)) %>%
-        left_join(AU_previous_categories_DO_class) %>%
-        left_join(AU_previous_categories_DO_class_no_class) %>%
-        mutate(AU_previous_IR_category = case_when(!is.na(AU_previous_IR_category_class) ~ AU_previous_IR_category_class,
-                                                   !is.na(AU_previous_IR_category_no_class) ~ AU_previous_IR_category_no_class)) %>%
-        select(all_of(df_names), AU_previous_IR_category)
-      
-    }
-    
-    if(nrow(df) != nrow(overall_join)){
-      
-      stop("Previous IR category join error. Input and output dataframes are not the same length.")
-    }
-    
-    
-    return(overall_join)
-  }
-  
+  source("Parameters/DO/DO_Delist_checker.R")
+ 
 # Testing and setup -----------------------------------------------------------------------------------------------
 
 
 # # 
 # df <- Results_censored_DO
 # write_excel <- TRUE
-
+a <- Sys.time()
 
 # Variable setup --------------------------------------------------------------------------------------------------
 
@@ -152,14 +43,15 @@ Results_spawndates <- df %>%
          is.crit = ifelse(SampleStartDate >= critstart & SampleStartDate <= critend, 1, 0 ),
          crit_spawn = 11.0,
          crit_Min = 9.0) %>%
-  filter(!is.null(OWRD_Basin) & DO_code %in% c(2,3,4)) %>%
+  filter(DO_code %in% c(2,3,4)) %>%
   filter(in_spawn == 1) %>%
   select(-crit_30D, -crit_7Mi,  -crit_Instant, -critstart, -critend, -is.crit )
 
+spawn_delist_eligability <- spawn_DO_delist_checker(Results_spawndates)
 
-# Summarize available non WS data to get a list of AU's to be analyzed using cont. data
+# Summarize available data to get a list of AU's to be analyzed using cont. data
 results_cont_summary <- Results_spawndates %>%
-  filter(str_detect(AU_ID, "WS", negate = TRUE)) %>%
+  #filter(str_detect(AU_ID, "WS", negate = TRUE)) %>%
   filter(Statistical_Base == "7DADMean") %>%
   group_by(AU_ID, year(SampleStartDate)) %>%
   summarise(tot_7d_metrics = n()) %>%
@@ -167,14 +59,16 @@ results_cont_summary <- Results_spawndates %>%
          !is.na(AU_ID)) %>%
   pull(AU_ID) 
 
-results_cont_summary_WS <- Results_spawndates %>%
-  filter(str_detect(AU_ID, "WS", negate = FALSE)) %>%
-  filter(Statistical_Base == "7DADMean") %>%
-  group_by(MLocID, year(SampleStartDate)) %>%
-  summarise(tot_7d_metrics = n()) %>%
-  filter(tot_7d_metrics >= required_crit_7d_periods) %>%
-  pull(MLocID) 
-
+# results_cont_summary_WS <- Results_spawndates %>%
+#   filter(str_detect(AU_ID, "WS", negate = FALSE)) %>%
+#   filter(Statistical_Base == "7DADMean") %>%
+#   group_by(MLocID, year(SampleStartDate)) %>%
+#   summarise(tot_7d_metrics = n()) %>%
+#   filter(tot_7d_metrics >= required_crit_7d_periods) %>%
+#   pull(MLocID) 
+# 
+# 
+# continuous_AUs <- unique(Results_spawndates$AU_ID)
 
 # Spawning Continuous ---------------------------------------------------------------------------------------------
 
@@ -182,19 +76,29 @@ results_cont_summary_WS <- Results_spawndates %>%
 
 spawn_cont_function <- function(df = Results_spawndates, continuous_list = results_cont_summary, AU_type){
 
+  
+
+## Testing ---------------------------------------------------------------------------------------------------------
+  # df = Results_spawndates
+  # continuous_list = results_cont_summary
+  # AU_type = 'other'
+  # 
+  
 #Setting AU_type to 'other' will group the analysis by AU_ID and set the filter to discard WS units (inverse = TRUE)
 #Setting AU_type to 'WS' will group the analysis by AU_ID and MlocID, and set the filter to only keep WS units (inverse = FALSE)
 if(AU_type == "other"){  
-  group1 <- c('AU_ID', 'DO_Class')
-  group2 <- c('AU_ID', 'Pollu_ID', 'wqstd_code',  'OWRD_Basin', 'DO_Class')
+  group1 <- c('AU_ID')
+  group2 <- c('AU_ID', 'Pollu_ID', 'wqstd_code')
+  group3 <- c('AU_ID', 'Pollu_ID', 'wqstd_code', 'period')
   inverse <- TRUE
   query_type = 'AU_ID'
   
   
   
 } else if (AU_type == "WS"){
-  group1 <- c('AU_ID', 'AU_GNIS_Name', 'MLocID', 'DO_Class')
-  group2 <- c('AU_ID', 'AU_GNIS_Name', 'MLocID', 'GNIS_Name', 'Pollu_ID', 'wqstd_code',  'OWRD_Basin', 'DO_Class') 
+  group1 <- c('AU_ID', 'AU_GNIS_Name', 'MLocID' )
+  group2 <- c('AU_ID', 'AU_GNIS_Name', 'MLocID', 'GNIS_Name', 'Pollu_ID', 'wqstd_code') 
+  roup3 <- c('AU_ID', 'MLocID','AU_GNIS_Name', 'GNIS_Name', 'Pollu_ID', 'wqstd_code', 'period') 
   inverse <- FALSE
   query_type = 'MLocID'
 }
@@ -213,60 +117,59 @@ if(AU_type == "other"){
 # Filter down to only 7-D, and daily minimums
 # Flag various violations
 
-if(AU_type == "other"){  
+
   
   continuous_data_analysis <- Results_spawndates %>%
+    filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
     filter(AU_ID %in% continuous_list) %>%
     filter(Statistical_Base %in% c("7DADMean", "Minimum")) %>%
     mutate(Violation = case_when(Statistical_Base == "7DADMean" & IRResultNWQSunit < crit_spawn ~ 1,
                                  Statistical_Base == "Minimum" & IRResultNWQSunit < crit_Min ~ 1,
                                  TRUE ~ 0 )) 
-} else if (AU_type == "WS"){
-  continuous_data_analysis <- Results_spawndates %>%
-    filter(MLocID %in% continuous_list) %>%
-    filter(Statistical_Base %in% c("7DADMean", "Minimum")) %>%
-    mutate(Violation = case_when(Statistical_Base == "7DADMean" & IRResultNWQSunit < crit_spawn ~ 1,
-                                 Statistical_Base == "Minimum" & IRResultNWQSunit < crit_Min ~ 1,
-                                 TRUE ~ 0 )) 
-}
+
+
+  Do_sat_sites <-continuous_data_analysis |> 
+    pull(AU_ID)
+# Get DO saturation -----------------------------------------------------------------------------------------------
 
 
 
 
 
+# Remove from here ------------------------------------------------------------------------------------------------
 
 
 # Run through initial categorization
 # This all gets redone in the end
 # Where percent saturation would make a difference, set category as "Check percent Sat"
-continuous_data_categories <- continuous_data_analysis %>%
-  filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
-  group_by_at(group1) %>%
-  summarise(Total_violations = sum(Violation),
-            Sum_7D_violations = sum(Violation [Statistical_Base == "7DADMean"]),
-            Sum_abs_min_violations = sum(Violation [Statistical_Base == "Minimum"])) %>%
-  mutate(IR_category = case_when(DO_Class != "Cold Water" & Sum_7D_violations >= 2 ~ "5",
-                                 DO_Class != "Cold Water" & Sum_abs_min_violations >= 2 ~ "5",
-                                 DO_Class == "Cold Water" & Sum_abs_min_violations >= 2 ~ "5",
-                                 DO_Class == "Cold Water" & Sum_7D_violations >= 2 &
-                                    Sum_abs_min_violations < 2 ~ "Check percent Sat",
-                                 Sum_7D_violations < 2 & Sum_abs_min_violations < 2 ~ "2",
-                                 TRUE ~ "Error" ))
-
-# Datatable of results that need percent saturation
-cont_perc_sat_check <- continuous_data_categories %>%
-  filter(AU_ID %in% unique(subset(continuous_data_categories, IR_category == "Check percent Sat" )$AU_ID) )
+# continuous_data_categories <- continuous_data_analysis %>%
+#   filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
+#   group_by_at(group1) %>%
+#   summarise(Total_violations = sum(Violation),
+#             Sum_7D_violations = sum(Violation [Statistical_Base == "7DADMean"]),
+#             Sum_abs_min_violations = sum(Violation [Statistical_Base == "Minimum"])) %>%
+#   mutate(IR_category = case_when(DO_Class != "Cold Water" & Sum_7D_violations >= 2 ~ "5",
+#                                  DO_Class != "Cold Water" & Sum_abs_min_violations >= 2 ~ "5",
+#                                  DO_Class == "Cold Water" & Sum_abs_min_violations >= 2 ~ "5",
+#                                  DO_Class == "Cold Water" & Sum_7D_violations >= 2 &
+#                                     Sum_abs_min_violations < 2 ~ "Check percent Sat",
+#                                  Sum_7D_violations < 2 & Sum_abs_min_violations < 2 ~ "2",
+#                                  TRUE ~ "Error" ))
+# 
+# # Datatable of results that need percent saturation
+# cont_perc_sat_check <- continuous_data_categories %>%
+#   filter(AU_ID %in% unique(subset(continuous_data_categories, IR_category == "Check percent Sat" )$AU_ID) )
 
 
 # Query Database --------------------------------------------------------------------------------------------------
 
-if(nrow(cont_perc_sat_check) > 0){
+#if(nrow(cont_perc_sat_check) > 0){
   
-
-  # List of monitoring locations that need DO sat 
-  # This list is used for the sql query that follows
-  continuous_mon_locs <- unique(cont_perc_sat_check$AU_ID)
-  
+# 
+#   # List of monitoring locations that need DO sat 
+#   # This list is used for the sql query that follows
+#   continuous_mon_locs <- unique(cont_perc_sat_check$AU_ID)
+#   
   
   # Get data from database --------------------------------------------------
   
@@ -281,7 +184,7 @@ if(nrow(cont_perc_sat_check) > 0){
   DOsat_AWQMS <- "SELECT [OrganizationID],[MLocID], [SampleStartDate],[SampleStartTime],[Statistical_Base],[IRResultNWQSunit] as DO_sat
 FROM [ResultsRawWater]
 WHERE   Char_Name = 'Dissolved oxygen saturation' AND 
-        AU_ID in ({continuous_mon_locs*}) AND 
+        AU_ID in ({Do_sat_sites*}) AND 
         Statistical_Base = 'Mean'"
   
   
@@ -291,10 +194,10 @@ WHERE   Char_Name = 'Dissolved oxygen saturation' AND
   
   
   
-  # Query out the mean DO values from the indentified monitoring locations
+  # Query out the mean DO values from the identified monitoring locations
   Doqry <- "SELECT * 
 FROM            VW_DO
-WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({continuous_mon_locs*})"
+WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({Do_sat_sites*})"
   
   
   Doqry <- glue::glue_sql(Doqry, .con = con)
@@ -302,10 +205,10 @@ WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({continuous_mon_locs*})"
   perc_sat_DO <- DBI::dbGetQuery(con, Doqry)
   
   
-  # Query out the mean temp values from the indentified monitoring locations
+  # Query out the mean temp values from the identified monitoring locations
   tempqry <- "SELECT * 
 FROM            VW_Temp_4_DO
-WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({continuous_mon_locs*})"
+WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({Do_sat_sites*})"
   
   tempqry <- glue::glue_sql(tempqry, .con = con)
   
@@ -368,9 +271,12 @@ WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({continuous_mon_locs*})"
   
   # Join DO_Sat values to the table that will be used for evaluation
   spawn_DO_data <- Results_spawndates %>%
+    filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
     filter(AU_ID %in% continuous_list) %>%
     filter(Statistical_Base %in% c("7DADMean", "Minimum")) %>%
     left_join(DO_sat_join, by = c('MLocID', 'SampleStartDate'  = 'Date')) %>%
+    mutate(dosat_mean7 = case_when(Statistical_Base == 'Minimum' ~ NA_real_,
+                                   TRUE ~ dosat_mean7)) |> 
     mutate(Violation = case_when(!is.na(dosat_mean7) & Statistical_Base == "7DADMean" & IRResultNWQSunit < crit_spawn &
                                    dosat_mean7 < 95 ~ 1,
                                  is.na(dosat_mean7) & Statistical_Base == "7DADMean" & IRResultNWQSunit < crit_spawn ~ 1,
@@ -378,47 +284,17 @@ WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({continuous_mon_locs*})"
                                  TRUE ~ 0 
                                  ))
   
-} else {
-  
-  # Join DO_Sat values to the table that will be used for evaluation
-  
-  
-  if(AU_type == "other"){
-  spawn_DO_data <- df %>%
-    filter(AU_ID %in% continuous_list) %>%
-    filter(Statistical_Base %in% c("7DADMean", "Minimum")) %>%
-    mutate(dosat_mean7 = NA_real_) %>%
-    mutate(Violation = case_when(!is.na(dosat_mean7) & Statistical_Base == "7DADMean" & IRResultNWQSunit < crit_spawn &
-                                   dosat_mean7 < 95 ~ 1,
-                                 is.na(dosat_mean7) & Statistical_Base == "7DADMean" & IRResultNWQSunit < crit_spawn ~ 1,
-                                 Statistical_Base == 'Minimum' & IRResultNWQSunit < crit_Min ~ 1,
-                                 TRUE ~ 0 
-    ))
-  } else {
-    
-    
-    spawn_DO_data <- df %>%
-      filter(MLocID %in% continuous_list) %>%
-      filter(Statistical_Base %in% c("7DADMean", "Minimum")) %>%
-      mutate(dosat_mean7 = NA_real_) %>%
-      mutate(Violation = case_when(!is.na(dosat_mean7) & Statistical_Base == "7DADMean" & IRResultNWQSunit < crit_spawn &
-                                     dosat_mean7 < 95 ~ 1,
-                                   is.na(dosat_mean7) & Statistical_Base == "7DADMean" & IRResultNWQSunit < crit_spawn ~ 1,
-                                   Statistical_Base == 'Minimum' & IRResultNWQSunit < crit_Min ~ 1,
-                                   TRUE ~ 0 
-      ))
-  }
-  
-} 
 
   
   spawn_cont_categories <- spawn_DO_data %>%
+    left_join(spawn_delist_eligability, relationship = "many-to-many") |> 
     group_by_at(group2) %>%
     summarise(Total_dates = n_distinct(SampleStartDate),
               Total_excursions = sum(Violation),
               Sum_7D_excursions = sum(Violation [Statistical_Base == "7DADMean"]),
-              Sum_abs_min_excursions = sum(Violation [Statistical_Base == "Minimum"])) %>%
-    mutate(period = "Spawn",
+              Sum_abs_min_excursions = sum(Violation [Statistical_Base == "Minimum"]),
+              Delist_eligability = max(Delist_eligability)) %>%
+    mutate(period = "spawn",
            IR_category = case_when(Sum_7D_excursions >= 2 ~ "5",
                                    Sum_abs_min_excursions >= 2 ~ "5",
                                    Sum_7D_excursions < 2 &
@@ -436,7 +312,7 @@ WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({continuous_mon_locs*})"
     mutate(IR_category = factor(IR_category, levels=c("3", "3B", "2", "5" ), ordered=TRUE))
   
   
-  spawn_cont_categories <- join_prev_assessments_DO(spawn_cont_categories, AU_type = AU_type)
+
     
   spawn_cont_list <- list(data = as.data.frame(spawn_DO_data),
                           AU_categories = spawn_cont_categories)
@@ -452,19 +328,23 @@ WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({continuous_mon_locs*})"
 # spawn instant function ------------------------------------------------------------------------------------------
 
 
-# Analyze year round criteria using instantaneous metrics
-print("Beginning instantaneous analysis")
-
-
 
 
 spawn_inst_function <- function(df = Results_spawndates, continuous_list = results_cont_summary, AU_type){
   
+  
+
+# testing ---------------------------------------------------------------------------------------------------------
+
+  # df = Results_spawndates
+  # continuous_list = results_cont_summary
+  # AU_type <- 'other'
+  
   #Setting AU_type to 'other' will group the analysis by AU_ID and set the filter to discard WS units (inverse = TRUE)
   #Setting AU_type to 'WS' will group the analysis by AU_ID and MlocID, and set the filter to only keep WS units (inverse = FALSE)
   if(AU_type == "other"){  
-    group1 <- c('AU_ID', 'DO_Class')
-    group2 <- c('AU_ID',  'Pollu_ID', 'wqstd_code',  'DO_Class')
+    group1 <- c('AU_ID')
+    group2 <- c('AU_ID',  'Pollu_ID', 'wqstd_code')
     inverse <- TRUE
     
     
@@ -475,7 +355,7 @@ spawn_inst_function <- function(df = Results_spawndates, continuous_list = resul
   }
   
   
-  if(AU_type == "other"){ 
+  
     
     instant_data_analysis <- df %>%
       filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
@@ -483,15 +363,7 @@ spawn_inst_function <- function(df = Results_spawndates, continuous_list = resul
       filter(Statistical_Base %in% c("Minimum", NA)) %>%
       mutate(Violation_crit = ifelse(IRResultNWQSunit < crit_spawn, 1, 0 ))
     
-  } else if (AU_type == "WS"){
-    
-    instant_data_analysis <- Results_spawndates %>%
-      filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
-      filter(!MLocID %in% continuous_list) %>%
-      filter(Statistical_Base %in% c("Minimum", NA)) %>%
-      mutate(Violation_crit = ifelse(IRResultNWQSunit < crit_spawn, 1, 0 ))
-    
-  }
+ 
 
 
   
@@ -515,7 +387,8 @@ WHERE ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*}) AND Ch
   
   Dosatqry <- glue::glue_sql(DOsat_AWQMS, .con = con)
   
-  instant_perc_sat_DO_AWQMS <- DBI::dbGetQuery(con, Dosatqry)
+  instant_perc_sat_DO_AWQMS <- DBI::dbGetQuery(con, Dosatqry) |> 
+    mutate(act_depth_height = as.numeric(act_depth_height))
   
 #   # Query DO data
 #   
@@ -542,11 +415,11 @@ WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})
   
   DBI::dbDisconnect(con)
   
-  # Remove duplicate DO sat Values that are mistakenly in AWQMS
-  instant_perc_sat_DO_AWQMS <- instant_perc_sat_DO_AWQMS %>%
-    mutate(SampleStartTime = substr(SampleStartTime, 1, 5)) %>%
-    distinct(MLocID, SampleStartDate,SampleStartTime,Statistical_Base, .keep_all = TRUE) %>%
-    mutate(act_depth_height = as.numeric(act_depth_height))
+  # # Remove duplicate DO sat Values that are mistakenly in AWQMS
+  # instant_perc_sat_DO_AWQMS <- instant_perc_sat_DO_AWQMS %>%
+  #   mutate(SampleStartTime = substr(SampleStartTime, 1, 5)) %>%
+  #   distinct(MLocID, SampleStartDate,SampleStartTime,Statistical_Base, .keep_all = TRUE) %>%
+  #   mutate(act_depth_height = as.numeric(act_depth_height))
   
   # 
   # instant_perc_sat_DO <- instant_perc_sat_DO %>%
@@ -560,11 +433,12 @@ WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})
     mutate(SampleStartTime = substr(SampleStartTime, 1, 5)) %>%
     rename(Temp_res = IRResultNWQSunit) %>%
     mutate(SampleStartDate = ymd(SampleStartDate)) %>%
-    mutate(act_depth_height = as.numeric(act_depth_height))
+    mutate(act_depth_height = as.numeric(act_depth_height)) 
   
   
   # Calculate DOSat
   DO_sat_data <- instant_data_analysis %>%
+    left_join(spawn_delist_eligability) |> 
     mutate(SampleStartTime = substr(SampleStartTime, 1, 5)) %>%
     left_join(instant_perc_sat_DO_AWQMS, c("OrganizationID", "MLocID", "Statistical_Base", 
                                            "SampleStartDate", "SampleStartTime", "act_depth_height")) %>%
@@ -583,8 +457,9 @@ WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})
     summarise(total_samples = n(),
               critical_excursions = binomial_excursions(total_samples, "Conventionals"),
               Total_dates = n_distinct(SampleStartDate),
-              Total_excursions = data.table::uniqueN(SampleStartDate[Violation == 1])) %>%
-    mutate(period = "Spawn",
+              Total_excursions = data.table::uniqueN(SampleStartDate[Violation == 1]),
+              Delist_eligability = max(Delist_eligability)) %>%
+    mutate(period = "spawn",
            IR_category = case_when(Total_dates >= req_inst_crit_samples & Total_excursions > critical_excursions ~ "5",
                                    Total_dates < req_inst_crit_samples & Total_excursions > 0 ~ "3B",
                                    Total_dates < req_inst_crit_samples & Total_excursions == 0 ~ "3",
@@ -606,7 +481,7 @@ WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})
                                  TRUE ~ "ERROR")) %>%
     mutate(IR_category = factor(IR_category, levels=c("3", "3B", "2", "5" ), ordered=TRUE))
   
-  spawn_inst_categories <- join_prev_assessments_DO(spawn_inst_categories, AU_type = AU_type)
+
   
   spawn_inst_list <- list(data = as.data.frame(DO_sat_data),
                           AU_categories = spawn_inst_categories)
@@ -625,10 +500,10 @@ WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})
 # Run continuous function -----------------------------------------------------------------------------------------
 
 
-# Watershed -------------------------------------------------------------------------------------------------------
+## Watershed -------------------------------------------------------------------------------------------------------
 
 
-spawn_cont_WS <- spawn_cont_function(continuous_list = results_cont_summary_WS,AU_type = "WS" )
+spawn_cont_WS <- spawn_cont_function(continuous_list = results_cont_summary, AU_type = "WS" )
 
 
 spawn_cont_WS_data <- spawn_cont_WS[['data']]
@@ -636,7 +511,7 @@ spawn_cont_WS_cats <- spawn_cont_WS[['AU_categories']]
 
 
 
-# Other -----------------------------------------------------------------------------------------------------------
+## Other -----------------------------------------------------------------------------------------------------------
 
 
 spawn_cont_other <- spawn_cont_function(continuous_list = results_cont_summary, AU_type = "other" )
@@ -649,17 +524,17 @@ spawn_cont_other_cats <- spawn_cont_other[['AU_categories']]
 
 # run instant function --------------------------------------------------------------------------------------------
 
-# Watershed -------------------------------------------------------------------------------------------------------
+## Watershed -------------------------------------------------------------------------------------------------------
 
 
-spawn_inst_WS <- spawn_inst_function(df = Results_spawndates, continuous_list = results_cont_summary_WS, AU_type = "WS")
+spawn_inst_WS <- spawn_inst_function(df = Results_spawndates, continuous_list = results_cont_summary, AU_type = "WS")
 
 spawn_inst_WS_data <- spawn_inst_WS[['data']]
 spawn_inst_WS_cats <- spawn_inst_WS[['AU_categories']]
 
 
 
-# Other -----------------------------------------------------------------------------------------------------------
+## Other -----------------------------------------------------------------------------------------------------------
 
 
 spawn_inst_other <- spawn_inst_function(df = Results_spawndates, continuous_list = results_cont_summary, AU_type = "other")
@@ -674,80 +549,171 @@ spawn_inst_other_cats <- spawn_inst_other[['AU_categories']]
 
 # Data combine ----------------------------------------------------------------------------------------------------
 
+
+## Data files ------------------------------------------------------------------------------------------------------
+
+
 cont_data_combined <- bind_rows(spawn_cont_other_data, spawn_cont_WS_data)
 
 inst_data_combined <- bind_rows(spawn_inst_other_data, spawn_inst_WS_data) 
 
 
 
-WS_AU_rollup_spawn <- spawn_inst_WS_cats %>%
-  select(AU_ID, MLocID, GNIS_Name, Pollu_ID, wqstd_code,  OWRD_Basin, period, IR_category, Rationale) %>%
-  bind_rows(select(spawn_cont_WS_cats, AU_ID, Pollu_ID, wqstd_code,  OWRD_Basin, period, IR_category, Rationale)) %>%
+
+# GNIS rollup -----------------------------------------------------------------------------------------------------
+
+
+WS_GNIS_rollup_inst <- spawn_inst_WS_cats %>%
+  mutate(Char_Name = 'Dissolved oxygen (DO)') |> 
+  mutate(Rationale = paste0(MLocID, ": ", Rationale)) |> 
   ungroup() %>%
-  #mutate(Rationale = past0(MLocID, ))
-  group_by(AU_ID, Pollu_ID, wqstd_code,  OWRD_Basin, period) %>%
-  summarise(IR_category_AU = max(IR_category),
-            Rationale_AU = str_c(MLocID, ": ", Rationale, collapse =  " ~ " ) ) %>%
-  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))
+  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
+  summarise(IR_category_GNIS_24 = max(IR_category),
+            Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
+            Delist_eligability = max(Delist_eligability)) %>% 
+  mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
+                                        TRUE ~ 0)) |> 
+  mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', "3", "3B", "2", "5" ), ordered=TRUE)) |> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
+
+
+WS_GNIS_rollup_cont <- spawn_cont_WS_cats %>%
+  mutate(Char_Name = 'Dissolved oxygen (DO)') |> 
+  mutate(Rationale = paste0(MLocID, ": ", Rationale)) |> 
+  ungroup() %>%
+  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
+  summarise(IR_category_GNIS_24 = max(IR_category),
+            Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
+            Delist_eligability = max(Delist_eligability)) %>% 
+  mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
+                                        TRUE ~ 0)) |> 
+  mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', "3", "3B", "2", "5" ), ordered=TRUE)) |> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
+
+## Combine mloc ----------------------------------------------------------------------------------------------------
+
+WS_categories <- bind_rows(spawn_cont_WS_cats, spawn_inst_WS_cats)
+
+## Combine GNIS ----------------------------------------------------------------------------------------------------
+
+WS_GNIS_rollup <- bind_rows(WS_GNIS_rollup_cont, WS_GNIS_rollup_inst)
+WS_GNIS_rollup <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")
+
+## Delist process --------------------------------------------------------------------------------------------------
+
+
+WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS') |> 
+  mutate(Char_Name = 'Dissolved oxygen (DO)')
+
+
+## AU Rollup -------------------------------------------------------------------------------------------------------
+
+
+WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup_delist, char_name_field = Char_Name)
+
+
+# Combine AU decisions --------------------------------------------------------------------------------------------
+Other_categories <- bind_rows(spawn_inst_other_cats, spawn_cont_other_cats)
+other_category <- join_prev_assessments(Other_categories, AU_type = 'Other')
+
+other_category_delist <-  assess_delist(other_category, type = "Other") |> 
+  mutate(Char_Name = 'Dissolved oxygen (DO)')|> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
+
+# prep data for export --------------------------------------------------------------------------------------------
+
+AU_display_other <- other_category_delist |> 
+  select(AU_ID, Char_Name,  Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+
+AU_display_ws <- WS_AU_rollup |> 
+  rename(prev_category = prev_AU_category,
+         prev_rationale = prev_AU_rationale,
+         final_AU_cat = IR_category_AU_24,
+         Rationale = Rationale_AU)
+
+AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
+  mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
+                               .default = Rationale))|> 
+  join_TMDL(type = 'AU')|> 
+  join_AU_info() |> 
+  relocate(prev_category, .after = year_last_assessed) |> 
+  relocate(prev_rationale, .after = prev_category) |> 
+  mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
+                                        .default = year_last_assessed)) |> 
+  mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
+                                 .default = Year_listed)) |> 
+  mutate(Char_Name = 'Dissolved oxygen (DO)')
 
 
 
+WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |> 
+  join_TMDL(type = 'GNIS') |> 
+  join_AU_info()|> 
+  relocate(Rationale_GNIS, .after = final_GNIS_cat) |> 
+  relocate(prev_GNIS_category, .after = Rationale_GNIS) |> 
+  relocate(prev_GNIS_rationale, .after = prev_GNIS_category)  |> 
+  mutate(Char_Name = 'Dissolved oxygen (DO)')
 
+
+spawn_cont_data <- bind_rows(spawn_cont_other_data, spawn_cont_WS_data)
+spawn_inst_data <- bind_rows(spawn_inst_other_data, spawn_inst_WS_data)
+
+Sys.time() - a
 
 if(write_excel){
   
 
+  
   wb <- createWorkbook()
   
-  addWorksheet(wb, sheetName = "Spawn Cont Data")
-  addWorksheet(wb, sheetName = "Spawn Instant Data")
+  addWorksheet(wb, sheetName = "AU_Decisions", tabColour = 'forestgreen')
   
-  addWorksheet(wb, sheetName = "Spawn Cont WS Station Cat")
-  addWorksheet(wb, sheetName = "Spawn Cont Other AU Cat")
+  addWorksheet(wb, sheetName = "Other_AU_categorization",tabColour = 'dodgerblue3')
+  addWorksheet(wb, sheetName = "WS station categorization", tabColour = 'lightblue3')
+  addWorksheet(wb, sheetName = "WS GNIS categorization", tabColour = 'lightyellow1')
   
-  addWorksheet(wb, sheetName = "Spawn Instant WS Station Cat")
-  addWorksheet(wb, sheetName = "Spawn Instant Other AU Cat")
+  addWorksheet(wb, sheetName = "DO spawn Data Inst",     tabColour = 'paleturquoise2')
+  addWorksheet(wb, sheetName = "DO spawn Data Cont",     tabColour = 'paleturquoise2')
   
-  addWorksheet(wb, sheetName = "Spawn WS AU combined Cat")
+  
+  
   
   
   header_st <- createStyle(textDecoration = "Bold", border = "Bottom")
   
+  writeData(wb = wb, sheet = "AU_Decisions", x = AU_display, headerStyle = header_st)
   
-  freezePane(wb, "Spawn Cont Data", firstRow = TRUE) 
-  freezePane(wb, "Spawn Instant Data", firstRow = TRUE) 
-  
-  freezePane(wb, "Spawn Cont WS Station Cat", firstRow = TRUE) 
-  freezePane(wb, "Spawn Cont Other AU Cat", firstRow = TRUE) 
-  freezePane(wb, "Spawn Instant WS Station Cat", firstRow = TRUE) 
-  freezePane(wb, "Spawn Instant Other AU Cat", firstRow = TRUE) 
-  freezePane(wb, "Spawn WS AU combined Cat", firstRow = TRUE) 
+  writeData(wb = wb, sheet = "Other_AU_categorization", x = other_category_delist, headerStyle = header_st)
+  writeData(wb = wb, sheet = "WS station categorization", x = WS_categories, headerStyle = header_st)
+  writeData(wb = wb, sheet = "WS GNIS categorization", x = WS_GNIS_rollup_delist, headerStyle = header_st)
   
   
-  writeData(wb, "Spawn Cont Data", x = cont_data_combined, headerStyle = header_st) 
-  writeData(wb, "Spawn Instant Data", x = inst_data_combined, headerStyle = header_st) 
+  writeData(wb = wb, sheet = "DO spawn Data Inst",   x = spawn_inst_data, headerStyle = header_st )
+  writeData(wb = wb, sheet = "DO spawn Data Cont",   x = spawn_cont_data, headerStyle = header_st )
   
-  writeData(wb, "Spawn Cont WS Station Cat", x= spawn_cont_WS_cats,  headerStyle = header_st) 
-  writeData(wb, "Spawn Cont Other AU Cat", x = spawn_cont_other_cats, headerStyle = header_st) 
-  writeData(wb, "Spawn Instant WS Station Cat", x = spawn_inst_WS_cats, headerStyle = header_st) 
-  writeData(wb, "Spawn Instant Other AU Cat", x= spawn_inst_other_cats, headerStyle = header_st) 
-  writeData(wb, "Spawn WS AU combined Cat", x = WS_AU_rollup_spawn, headerStyle = header_st) 
   
   print("Writing excel doc")
-  saveWorkbook(wb, "Parameters/Outputs/DO Spawn.xlsx", overwrite = TRUE) 
+  saveWorkbook(wb, paste0("Parameters/Outputs/DO Spawn-",Sys.Date(), ".xlsx"), overwrite = TRUE) 
+  
+  
+  
+  
+  
   
 }
 
 # list out --------------------------------------------------------------------------------------------------------
 
-  DO_spawn_list <- list(Spawn_cont_data = cont_data_combined,
-                        Spawn_inst_data = inst_data_combined,
-                        Spawn_cont_WS_station_cat = spawn_cont_WS_cats,
-                        Spawn_cont_Other_AU_Cat = spawn_cont_other_cats,
-                        Spawn_inst_WS_station_cat = spawn_inst_WS_cats,
-                        Spawn_inst_Other_AU_cat = spawn_inst_other_cats, 
-                        Spawn_combined_WS_AU_cat = WS_AU_rollup_spawn)
-  
-  return(DO_spawn_list)  
+
+DO_spawn_list <- list(AU_display = AU_display,
+                      Other_AU_categorization = other_category_delist,
+                      WS_GNIS_categorization = as.data.frame(WS_GNIS_rollup_delist),
+                      WS_station_categorization = WS_categories,
+                      cont_data = spawn_cont_data,
+                      inst_data = spawn_inst_data)
+     
+     
+    return(DO_spawn_list)  
   
 }

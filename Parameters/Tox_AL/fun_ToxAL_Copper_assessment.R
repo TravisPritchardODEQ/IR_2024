@@ -11,8 +11,8 @@ copper_assessment <- function(CU_file= 'Parameters/Tox_AL/Copper_criteria_result
 
 # Somewhere in the export/import some MLociD's got truncated. Get a list to fix that ------------------------------
 
-  
-  
+  #CU_file <- 'Parameters/Tox_AL/Copper_criteria_results_2024.csv'
+  database = "IR_Dev"
   
   #open connection to database
   con <- DBI::dbConnect(odbc::odbc(), database)
@@ -127,38 +127,98 @@ AL_tox_CU_assess_fun <- function(df_data = Results_censored, AU_type){
                                                                                                                critical_excursions, " needed to list- ",
                                                                                                                num_samples, " total samples")
     )) %>%
-    mutate(IR_category = factor(IR_category, levels=c("3D", "3", "3B", "2", "5" ), ordered=TRUE))
+    mutate(IR_category = factor(IR_category, levels=c("3D", "3", "3B", "2", "5" ), ordered=TRUE)) |> 
+    mutate(period = NA_character_) |> 
+    mutate(Delist_eligability = case_when(num_samples_crit_excursion_calc >= 18 & num_excursions_dissolved_fraction <= binomial_delisting(num_samples, 'Toxics')  ~ 1,
+                                          TRUE ~ 0)) 
   
-  Results_tox_AL_CU_cats <- join_prev_assessments(Results_tox_AL_CU_cats, AU_type = AU_type)     
+  
+    
   return(Results_tox_AL_CU_cats)
   
 }
 
 
+# Watershed assessment --------------------------------------------------------------------------------------------
+
+
 AL_Tox_CU_WS <- AL_tox_CU_assess_fun(df_data = Results_censored, AU_type = "WS")
 
 
-AL_Tox_CU_other <- AL_tox_CU_assess_fun(df_data = Results_censored, AU_type = "other") %>%
-  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code))
 
-
-WS_AU_rollup <- AL_Tox_CU_WS %>%
-  select(AU_ID, MLocID, AU_GNIS_Name, Pollu_ID, wqstd_code,   Char_Name, IR_category, Rationale) %>%
+WS_GNIS_rollup <- AL_Tox_CU_WS %>%
   ungroup() %>%
-  group_by(AU_ID, Char_Name, Pollu_ID, wqstd_code) %>%
-  summarise(IR_category_AU = max(IR_category),
-            Rationale_AU = str_c(MLocID, ": ", Rationale, collapse =  " ~ " ) ) %>%
-  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code))
+  mutate(Rationale = paste0(MLocID, "; ",  Rationale)) |> 
+  group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
+  summarise(IR_category_GNIS_24 = max(IR_category),
+            Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
+            Delist_eligability = max(Delist_eligability)) %>% 
+  mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
+                                        TRUE ~ 0)) |> 
+  mutate(IR_category_GNIS_24 = factor(IR_category_GNIS_24, levels=c('Unassessed', '3D',"3", "3B","3C", "2", "5", '4A', '4B', '4C'), ordered=TRUE)) |> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))  
 
-WS_AU_rollup <- join_prev_assessments(WS_AU_rollup, AU_type = 'other')
-Results_tox_CU_AL <- list(data = Results_censored,
-                          AL_Tox_CU_WS = AL_Tox_CU_WS,
-                          WS_AU_rollup = WS_AU_rollup,
-                          AL_Tox_CU_other = AL_Tox_CU_other)
+WS_GNIS_rollup <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS") |> 
+  mutate(Char_Name = 'Copper') |> 
+  relocate(Char_Name, .after = AU_GNIS_Name)
 
-return(Results_tox_CU_AL)
+
+### Delist process --------------------------------------------------------------------------------------------------
+
+
+WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')
+
+## AU Rollup -------------------------------------------------------------------------------------------------------
+
+
+WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup, char_name_field = Char_Name)   
+
+
+
+
+# Other assessment ------------------------------------------------------------------------------------------------
+
+
+AL_Tox_CU_other <- AL_tox_CU_assess_fun(df_data = Results_censored, AU_type = "other") |> 
+  mutate(recordID = paste0("2024-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code,"-", period ))
+
+
+other_category <- join_prev_assessments(AL_Tox_CU_other, AU_type = 'Other') |> 
+  mutate(Char_Name = 'Copper') |> 
+  relocate(Char_Name, .after = AU_ID)
+
+other_category_delist <-  assess_delist(other_category, type = "Other") |> 
+  ungroup()
+
+
+
+# prep data for export --------------------------------------------------------------------------------------------
+
+AU_display_other <- other_category_delist |> 
+  select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
+         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+
+AU_display_ws <- WS_AU_rollup |> 
+  rename(prev_category = prev_AU_category,
+         prev_rationale = prev_AU_rationale,
+         final_AU_cat = IR_category_AU_24,
+         Rationale = Rationale_AU)
+
+AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
+  mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
+                               .default = Rationale))
+
+
+
+AL_copper_list <- list(data = Results_censored,
+                        AU_Decisions = AU_display,
+                        Other_AU_categorization = other_category_delist,
+                        WS_Station_cat = AL_Tox_CU_WS,
+                        WS_GNIS_cat = WS_GNIS_rollup_delist)
+
+return(AL_copper_list)
+
+
 }
 
 
-
-  

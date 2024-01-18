@@ -40,7 +40,7 @@ tox_AL_penta_cat <- TOX_AL_penta_analysis(tox_AL_penta_data)
 
 
 #Copper_data("IR_Dev")
-Copper_categories <- copper_assessment(CU_file= 'Parameters/Tox_AL/Copper_criteria_results.csv')
+Copper_categories <- copper_assessment(CU_file= 'Parameters/Tox_AL/Copper_criteria_results_2024.csv')
 
 
 # Ammonia ---------------------------------------------------------------------------------------------------------
@@ -56,7 +56,8 @@ tox_AL_aluminum  <- aluminum_assessment("IR_Dev")
 
 
 tox_AL_data                   <- Tox_AL_categories[["data"]]
-tox_AL_AU_Decisions           <- Tox_AL_categories[["AU_Decisions"]]
+tox_AL_AU_Decisions           <- Tox_AL_categories[["AU_Decisions"]] |> 
+  mutate(Pollu_ID = as.character(Pollu_ID))
 tox_AL_other_AU_cat           <- Tox_AL_categories[['Other_AU_categorization']]
 tox_AL_WS_cats                <- Tox_AL_categories[["WS_Station_cat"]]
 tox_AL_GNIS_cat               <- Tox_AL_categories[["WS_GNIS_cat"]]
@@ -64,19 +65,22 @@ tox_AL_GNIS_cat               <- Tox_AL_categories[["WS_GNIS_cat"]]
 
 
 tox_AL_hard_data               <- Tox_AL_hardness_cat[["data"]]
-tox_AL_hard_AU_Decisions       <- Tox_AL_hardness_cat[['AU_Decisions']]
+tox_AL_hard_AU_Decisions       <- Tox_AL_hardness_cat[['AU_Decisions']]|> 
+  mutate(Pollu_ID = as.character(Pollu_ID))
 tox_AL_hard_other_AU_cat       <- Tox_AL_hardness_cat[["Other_AU_categorization"]]
 tox_AL_hard_WS_cats            <- Tox_AL_hardness_cat[["WS_Station_cat"]]
 tox_AL_hard_GNIS_cat           <- Tox_AL_hardness_cat[["WS_GNIS_cat"]]
 
 tox_AL_penta_data               <- tox_AL_penta_cat[["data"]]
-tox_AL_penta_AU_Decisions       <- tox_AL_penta_cat[['AU_Decisions']]
+tox_AL_penta_AU_Decisions       <- tox_AL_penta_cat[['AU_Decisions']]|> 
+  mutate(Pollu_ID = as.character(Pollu_ID))
 tox_AL_penta_other_AU_cat       <- tox_AL_penta_cat[["Other_AU_categorization"]]
 tox_AL_penta_WS_cats            <- tox_AL_penta_cat[["WS_Station_cat"]]
 tox_AL_penta_GNIS_cat           <- tox_AL_penta_cat[["WS_GNIS_cat"]]
 
 tox_AL_Ammonia_data             <- tox_AL_Ammonia[["data"]]
-tox_AL_Ammonia_AU_Decisions     <- tox_AL_Ammonia[['AU_Decisions']]
+tox_AL_Ammonia_AU_Decisions     <- tox_AL_Ammonia[['AU_Decisions']]|> 
+  mutate(Pollu_ID = as.character(Pollu_ID))
 tox_AL_Ammonia_other_AU_cat     <- tox_AL_Ammonia[["Other_AU_categorization"]]
 tox_AL_Ammonia_WS_cats          <- tox_AL_Ammonia[["WS_Station_cat"]]
 tox_AL_Ammonia_GNIS_cat         <- tox_AL_Ammonia[["WS_GNIS_cat"]]
@@ -85,121 +89,93 @@ tox_AL_Ammonia_GNIS_cat         <- tox_AL_Ammonia[["WS_GNIS_cat"]]
 
 
 tox_AL_Aluminum_data            <-  tox_AL_aluminum[["data"]]
-tox_AL_Aluminum_AU_Decisions    <-  tox_AL_aluminum[['AU_Decisions']]
+tox_AL_Aluminum_AU_Decisions    <-  tox_AL_aluminum[['AU_Decisions']]|> 
+  mutate(Pollu_ID = as.character(Pollu_ID))
 tox_AL_Aluminum_other_AU_cat    <-  tox_AL_aluminum[["Other_AU_categorization"]]
 tox_AL_Aluminum_WS_cats         <-  tox_AL_aluminum[["WS_Station_cat"]]
 tox_AL_Aluminum_GNIS_cat        <-  tox_AL_aluminum[["WS_GNIS_cat"]]
 
 
-# tox_AL_Copper_data              <- Copper_categories[["data"]]
-# tox_AL_Copper_AU_Decisions      <- Copper_categories[['AU_Decisions']]
-# tox_AL_Copper_other_AU_cat      <- Copper_categories[["Other_AU_categorization"]]
-# tox_AL_Copper_WS_cats           <- Copper_categories[["WS_Station_cat"]]
-# tox_AL_Copper_GNIS_cat          <- Copper_categories[["WS_GNIS_cat"]]
+tox_AL_Copper_data              <- Copper_categories[["data"]]
+tox_AL_Copper_AU_Decisions      <- Copper_categories[['AU_Decisions']]|> 
+  mutate(Pollu_ID = as.character(Pollu_ID))
+tox_AL_Copper_other_AU_cat      <- Copper_categories[["Other_AU_categorization"]]
+tox_AL_Copper_WS_cats           <- Copper_categories[["WS_Station_cat"]]
+tox_AL_Copper_GNIS_cat          <- Copper_categories[["WS_GNIS_cat"]]
+
+
+
+
+
+# Combine ---------------------------------------------------------------------------------------------------------
+
+AU_Decisions <- bind_rows(tox_AL_AU_Decisions,tox_AL_hard_AU_Decisions,tox_AL_penta_AU_Decisions, 
+                          tox_AL_Ammonia_AU_Decisions, tox_AL_Aluminum_AU_Decisions, tox_AL_Copper_AU_Decisions )
+
+
+GNIS_cat <- bind_rows(tox_AL_GNIS_cat, tox_AL_hard_GNIS_cat, tox_AL_penta_GNIS_cat, tox_AL_Ammonia_GNIS_cat,
+                      tox_AL_Aluminum_GNIS_cat,tox_AL_Copper_GNIS_cat )
+
+
+
 
 
 # Write excel doc -------------------------------------------------------------------------------------------------
 library(openxlsx)
 
-
-wb <- createWorkbook()
-addWorksheet(wb, sheetName = "tox_AL_data"            )   
-addWorksheet(wb, sheetName = "tox_AL_other_cats"      )   
-addWorksheet(wb, sheetName = "tox_AL_WS_cats"         )
-addWorksheet(wb, sheetName = "tox_AL_WS_rollup"  )  
-
-addWorksheet(wb, sheetName = "tox_AL_hard_data"       )   
-addWorksheet(wb, sheetName = "tox_AL_hard_other_cats" )   
-addWorksheet(wb, sheetName = "tox_AL_hard_WS_cats"    ) 
-addWorksheet(wb, sheetName = "tox_AL_hard_WS_rollup"  )
-
-addWorksheet(wb, sheetName = 'tox_AL_penta_data'       )
-addWorksheet(wb, sheetName = 'tox_AL_penta_other_cats' )
-addWorksheet(wb, sheetName = 'tox_AL_penta_WS_cats'    )
-addWorksheet(wb, sheetName = 'tox_AL_penta_WS_rollup'  )
-
-
-addWorksheet(wb, sheetName = "tox_AL_Ammonia_data"      )   
-addWorksheet(wb, sheetName = "tox_AL_Ammonia_other_cats"      )   
-addWorksheet(wb, sheetName = "tox_AL_Ammonia_WS_cats"      )   
-addWorksheet(wb, sheetName = "tox_AL_Ammonia_WS_rollup"  )  
-
-addWorksheet(wb, sheetName =  'tox_AL_Aluminum_data'           )   
-addWorksheet(wb, sheetName =  'tox_AL_Aluminum_other_cats'      )   
-addWorksheet(wb, sheetName =  'tox_AL_Aluminum_WS_cats'      )   
-addWorksheet(wb, sheetName =  'tox_AL_Aluminum_WS_rollup'       )  
-
-addWorksheet(wb, sheetName = 'tox_AL_Copper_data'       )
-addWorksheet(wb, sheetName = 'tox_AL_Copper_other_cats' )
-addWorksheet(wb, sheetName = 'tox_AL_Copper_WS_cats'    )
-addWorksheet(wb, sheetName = 'tox_AL_Copper_WS_rollup'  )
-
-
-
 header_st <- createStyle(textDecoration = "Bold", border = "Bottom")
 
-freezePane(wb, "tox_AL_data"                , firstRow = TRUE)
-freezePane(wb, "tox_AL_other_cats"          , firstRow = TRUE)
-freezePane(wb, "tox_AL_WS_cats"             , firstRow = TRUE)
-freezePane(wb, "tox_AL_WS_rollup"      ,    firstRow = TRUE)
+wb <- createWorkbook()
+addWorksheet(wb, sheetName = "AU_Decisions", tabColour = 'forestgreen'            )   
+addWorksheet(wb, sheetName = "GNIS_cat" , tabColour = 'lightyellow1'     )  
 
-freezePane(wb, "tox_AL_hard_data"           , firstRow = TRUE)
-freezePane(wb, "tox_AL_hard_other_cats"     , firstRow = TRUE)
-freezePane(wb, "tox_AL_hard_WS_cats"        , firstRow = TRUE)
-freezePane(wb, "tox_AL_hard_WS_rollup"      , firstRow = TRUE)
+addWorksheet(wb, sheetName = "tox_AL_other_AU_cat"         ,tabColour = 'dodgerblue3'   ) 
+addWorksheet(wb, sheetName = "tox_AL_hard_other_AU_cat"    ,tabColour = 'dodgerblue3'  ) 
+addWorksheet(wb, sheetName = "tox_AL_penta_other_AU_cat"   ,tabColour = 'dodgerblue3'  ) 
+addWorksheet(wb, sheetName = "tox_AL_Ammonia_other_AU_cat" ,tabColour = 'dodgerblue3'  ) 
+addWorksheet(wb, sheetName = "tox_AL_Aluminum_other_AU_cat",tabColour = 'dodgerblue3'  ) 
+addWorksheet(wb, sheetName = "tox_AL_Copper_other_AU_cat"  ,tabColour = 'dodgerblue3'  ) 
 
-freezePane(wb,  'tox_AL_penta_data'       ,        firstRow = TRUE)
-freezePane(wb,  'tox_AL_penta_other_cats' ,        firstRow = TRUE)
-freezePane(wb,  'tox_AL_penta_WS_cats'    , firstRow = TRUE)
-freezePane(wb,  'tox_AL_penta_WS_rollup'  , firstRow = TRUE)
+addWorksheet(wb, sheetName = "tox_AL_WS_cats"          , tabColour = 'lightblue3' ) 
+addWorksheet(wb, sheetName = "tox_AL_hard_WS_cats"     , tabColour = 'lightblue3' ) 
+addWorksheet(wb, sheetName = "tox_AL_penta_WS_cats"    , tabColour = 'lightblue3' ) 
+addWorksheet(wb, sheetName = "tox_AL_Ammonia_WS_cats"  , tabColour = 'lightblue3' ) 
+addWorksheet(wb, sheetName = "tox_AL_Aluminum_WS_cats" , tabColour = 'lightblue3' ) 
+addWorksheet(wb, sheetName = "tox_AL_Copper_WS_cats"   , tabColour = 'lightblue3' ) 
 
-
-freezePane(wb, "tox_AL_Ammonia_data"        , firstRow = TRUE)
-freezePane(wb, "tox_AL_Ammonia_other_cats"  , firstRow = TRUE)
-freezePane(wb, "tox_AL_Ammonia_WS_cats"     , firstRow = TRUE)
-freezePane(wb, "tox_AL_Ammonia_WS_rollup"   , firstRow = TRUE) 
-
-freezePane(wb,  'tox_AL_Aluminum_data'       , firstRow = TRUE)
-freezePane(wb,  'tox_AL_Aluminum_other_cats' , firstRow = TRUE)
-freezePane(wb,  'tox_AL_Aluminum_WS_cats'    , firstRow = TRUE)
-freezePane(wb,  'tox_AL_Aluminum_WS_rollup'  , firstRow = TRUE) 
-
-
-freezePane(wb, 'tox_AL_Copper_data',   firstRow = TRUE)
-freezePane(wb, 'tox_AL_Copper_other_cats', firstRow = TRUE)
-freezePane(wb, 'tox_AL_Copper_WS_cats'   , firstRow = TRUE)
-freezePane(wb, 'tox_AL_Copper_WS_rollup' , firstRow = TRUE)
-
-writeData(wb = wb, sheet = "tox_AL_data"                , x = tox_AL_data, headerStyle = header_st)
-writeData(wb = wb, sheet = "tox_AL_other_cats"          , x = tox_AL_other_cats , headerStyle = header_st)
-writeData(wb = wb, sheet = "tox_AL_WS_cats"             , x = tox_AL_WS_cats, headerStyle = header_st)
-writeData(wb = wb, sheet = "tox_AL_WS_rollup"      , x = tox_AL_WS_rollup, headerStyle = header_st)
-
-writeData(wb = wb, sheet = "tox_AL_hard_data"           , x = tox_AL_hard_data, headerStyle = header_st)
-writeData(wb = wb, sheet = "tox_AL_hard_other_cats"     , x = tox_AL_hard_other_cats, headerStyle = header_st)
-writeData(wb = wb, sheet = "tox_AL_hard_WS_cats"        , x = tox_AL_hard_WS_cats, headerStyle = header_st)
-writeData(wb = wb, sheet = "tox_AL_hard_WS_rollup"      , x = tox_AL_hard_WS_rollup, headerStyle = header_st)
-
-writeData(wb = wb, sheet =   'tox_AL_penta_data'      , x = tox_AL_penta_data      ,  headerStyle = header_st)
-writeData(wb = wb, sheet =   'tox_AL_penta_other_cats', x = tox_AL_penta_other_cats,  headerStyle = header_st)
-writeData(wb = wb, sheet =   'tox_AL_penta_WS_cats'   , x = tox_AL_penta_WS_cats   ,  headerStyle = header_st)
-writeData(wb = wb, sheet =   'tox_AL_penta_WS_rollup' , x = tox_AL_penta_WS_rollup ,  headerStyle = header_st)
+addWorksheet(wb, sheetName = "tox_AL_data"          ,     tabColour = 'paleturquoise2' ) 
+addWorksheet(wb, sheetName = "tox_AL_hard_data"     ,     tabColour = 'paleturquoise2' ) 
+addWorksheet(wb, sheetName = "tox_AL_penta_data"    ,     tabColour = 'paleturquoise2' ) 
+addWorksheet(wb, sheetName = "tox_AL_Ammonia_data"  ,     tabColour = 'paleturquoise2' ) 
+addWorksheet(wb, sheetName = "tox_AL_Aluminum_data" ,     tabColour = 'paleturquoise2' ) 
+addWorksheet(wb, sheetName = "tox_AL_Copper_data"   ,     tabColour = 'paleturquoise2' )  
 
 
-writeData(wb = wb, sheet = "tox_AL_Ammonia_data"        , x = tox_AL_Ammonia_data, headerStyle = header_st)
-writeData(wb = wb, sheet = "tox_AL_Ammonia_other_cats"  , x = tox_AL_Ammonia_other_cats, headerStyle = header_st) 
-writeData(wb = wb, sheet = "tox_AL_Ammonia_WS_cats"     , x = tox_AL_Ammonia_WS_cats, headerStyle = header_st)
-writeData(wb = wb, sheet = "tox_AL_Ammonia_WS_rollup"   , x = tox_AL_Ammonia_WS_rollup, headerStyle = header_st)
 
-writeData(wb = wb, sheet =  'tox_AL_Aluminum_data'        , x = tox_AL_Aluminum_data, headerStyle = header_st)
-writeData(wb = wb, sheet =  'tox_AL_Aluminum_other_cats'  , x = tox_AL_Aluminum_other_cats,    headerStyle = header_st) 
-writeData(wb = wb, sheet =  'tox_AL_Aluminum_WS_cats'     , x = tox_AL_Aluminum_WS_cats,   headerStyle = header_st)
-writeData(wb = wb, sheet =  'tox_AL_Aluminum_WS_rollup'   , x = tox_AL_Aluminum_WS_rollup,   headerStyle = header_st)
+writeData(wb = wb, sheet = "AU_Decisions"                , x = AU_Decisions, headerStyle = header_st)
+writeData(wb = wb, sheet = "GNIS_cat"          ,          x = GNIS_cat , headerStyle = header_st)
 
-writeData(wb = wb, sheet= 'tox_AL_Copper_data'      , x = tox_AL_Copper_data        , headerStyle = header_st)
-writeData(wb = wb, sheet= 'tox_AL_Copper_other_cats', x = tox_AL_Copper_other_cats, headerStyle = header_st)
-writeData(wb = wb, sheet= 'tox_AL_Copper_WS_cats'   , x = tox_AL_Copper_WS_cats   , headerStyle = header_st)
-writeData(wb = wb, sheet= 'tox_AL_Copper_WS_rollup' , x = tox_AL_Copper_WS_rollup , headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_other_AU_cat"                     , x = tox_AL_other_AU_cat         , headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_hard_other_AU_cat"                , x = tox_AL_hard_other_AU_cat    , headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_penta_other_AU_cat"               , x = tox_AL_penta_other_AU_cat   , headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_Ammonia_other_AU_cat"             , x = tox_AL_Ammonia_other_AU_cat , headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_Aluminum_other_AU_cat"            , x = tox_AL_Aluminum_other_AU_cat, headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_Copper_other_AU_cat"              , x = tox_AL_Copper_other_AU_cat  , headerStyle = header_st)
+
+writeData(wb = wb, sheet = "tox_AL_WS_cats"                      , x = tox_AL_WS_cats         , headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_hard_WS_cats"                 , x = tox_AL_hard_WS_cats    , headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_penta_WS_cats"                , x = tox_AL_penta_WS_cats   , headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_Ammonia_WS_cats"              , x = tox_AL_Ammonia_WS_cats , headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_Aluminum_WS_cats"             , x = tox_AL_Aluminum_WS_cats, headerStyle = header_st)
+writeData(wb = wb, sheet = "tox_AL_Copper_WS_cats"               , x = tox_AL_Copper_WS_cats  , headerStyle = header_st)
+
+writeData(wb = wb, sheet =  "tox_AL_data"                     , x = tox_AL_data          , headerStyle = header_st)
+writeData(wb = wb, sheet =  "tox_AL_hard_data"                , x = tox_AL_hard_data     , headerStyle = header_st)
+writeData(wb = wb, sheet =  "tox_AL_penta_data"               , x = tox_AL_penta_data    , headerStyle = header_st)
+writeData(wb = wb, sheet =  "tox_AL_Ammonia_data"             , x = tox_AL_Ammonia_data  , headerStyle = header_st)
+writeData(wb = wb, sheet =  "tox_AL_Aluminum_data"            , x = tox_AL_Aluminum_data , headerStyle = header_st)
+writeData(wb = wb, sheet =  "tox_AL_Copper_data"              , x = tox_AL_Copper_data   , headerStyle = header_st)
+
 
 print("Writing excel doc")
 saveWorkbook(wb, "Parameters/Outputs/Tox_AL.xlsx", overwrite = TRUE) 

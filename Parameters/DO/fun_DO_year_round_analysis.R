@@ -3,7 +3,9 @@
 
 fun_DO_year_round <- function(df, write_excel = TRUE ){
 
-# Testing and setup -----------------------------------------------------------------------------------------------
+
+  source("Parameters/DO/DO_Delist_checker.R")
+  # Testing and setup -----------------------------------------------------------------------------------------------
 
 
 # 
@@ -841,7 +843,7 @@ WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |>
 Yr_Rnd_cont_data <- bind_rows(year_round_cont_other_data, year_round_cont_WS_data)
 Yr_Rnd_inst_data <- bind_rows(year_round_inst_other_data, year_round_inst_WS_data)
 
-if(write_xlsx){
+if(write_excel){
   
   
   
@@ -877,14 +879,13 @@ if(write_xlsx){
 }
 
 
-# DO_year_round <- list(Yr_Rnd_cont_data = cont_data_combined,
-#                       Yr_Rnd_inst_data = inst_data_combined,
-#                       Yr_Rnd_cont_WS_station_cat = year_round_cont_WS_categories,
-#                       Yr_Rnd_cont_Other_AU_Cat = year_round_cont_other_categories,
-#                       Yr_Rnd_inst_WS_station_cat = year_round_inst_WS_categories,
-#                       Yr_Rnd_inst_Other_AU_cat = year_round_inst_other_categories, 
-#                       Yr_Rnd_combined_WS_AU_cat = WS_AU_rollup_year_round)
-# 
-# return(DO_year_round)
+DO_year_round <- list(AU_display = AU_display,
+                      Other_AU_categorization = other_category_delist,
+                      WS_GNIS_categorization = as.data.frame(WS_GNIS_rollup_delist),
+                      WS_station_categorization = WS_categories,
+                      cont_data = Yr_Rnd_cont_data,
+                      inst_data = Yr_Rnd_inst_data)
+
+return(DO_year_round)
 
 }
