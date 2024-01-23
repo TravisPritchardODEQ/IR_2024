@@ -13,8 +13,11 @@ bio_data <- function(database) {
   IR.sql <-  DBI::dbConnect(odbc::odbc(), database)
   
   
-  Results_import <- DBI::dbReadTable(IR.sql, "VW_BioCriteria")
+  # Results_import <- DBI::dbReadTable(IR.sql, "VW_BioCriteria")
+  # 
   
+  Results_import <- tbl(IR.sql, 'VW_BioCriteria') |> 
+    collect()
   
   DBI::dbDisconnect(IR.sql)
   
@@ -24,6 +27,8 @@ bio_data <- function(database) {
   # Data censoring --------------------------------------------------------------------------------------------------
   
   # There is no need for data review or censored data ?? 
+  
+  return(Results_import)
   
 }
 
