@@ -105,7 +105,8 @@ pH_assessment <- function(cont_data, grab_data, write_xlsx = TRUE){
     
   cont_pH_categories <- pH_data_together %>%
     group_by_at(group2) %>% 
-    summarise(total_continuous_days = n_distinct(Result_Date[!is.na(daily_ten_num_Samples)]),
+    summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+              total_continuous_days = n_distinct(Result_Date[!is.na(daily_ten_num_Samples)]),
               sum_daily_ten_excursion = n_distinct(Result_Date[!is.na(daily_ten_num_Samples) & daily_ten_excursion == 1]),
               sum_daily_ten_excursion_high = n_distinct(Result_Date[!is.na(daily_ten_num_Samples) & daily_ten_excursion_high > 0]),
               sum_daily_ten_excursion_low = n_distinct(Result_Date[!is.na(daily_ten_num_Samples) & daily_ten_excursion_low > 0]),
@@ -241,7 +242,8 @@ pH_assessment <- function(cont_data, grab_data, write_xlsx = TRUE){
   WS_GNIS_rollup <- WS_categories %>%
     ungroup() %>%
     group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
-    summarise(IR_category_GNIS_24 = max(IR_category),
+    summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+              IR_category_GNIS_24 = max(IR_category),
               Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
               Delist_eligability = max(Delist_eligability)) %>% 
     mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
@@ -281,7 +283,7 @@ pH_assessment <- function(cont_data, grab_data, write_xlsx = TRUE){
   
   AU_display_other <- other_category_delist |> 
     select(AU_ID, Char_Name,  Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
-           final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+           final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
   
   AU_display_ws <- WS_AU_rollup |> 
     rename(prev_category = prev_AU_category,

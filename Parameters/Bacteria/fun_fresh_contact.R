@@ -107,6 +107,7 @@ fresh_AU_summary_WS0 <-  fresh_contact_geomeans %>%
   ungroup() %>%
   group_by(AU_ID, MLocID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code ) %>%
   summarise(OWRD_Basin = first(OWRD_Basin), 
+            #stations =  stringr::str_c(unique(MLocID), collapse = "; "),
             Max_Geomean = ifelse(!all(is.na(geomean)),max(geomean, na.rm = TRUE),NA),
             max.value  = max(Result_cen),
             num_Samples = as.numeric(n()),
@@ -158,7 +159,8 @@ fresh_AU_summary_WS0 <-  fresh_contact_geomeans %>%
 WS_GNIS_rollup <- fresh_AU_summary_WS0 %>%
   ungroup() %>%
   group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
-  summarise(IR_category_GNIS_24 = max(IR_category),
+  summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+            IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
   mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
@@ -264,6 +266,7 @@ fresh_AU_summary_no_WS0 <-  fresh_contact_geomeans_other %>%
   group_by(AU_ID, Pollu_ID, wqstd_code ) %>%
   summarise(OWRD_Basin = first(OWRD_Basin), 
             Max_Geomean = ifelse(!all(is.na(geomean)),max(geomean, na.rm = TRUE),NA),
+            stations =  stringr::str_c(unique(MLocID), collapse = "; "),
             max.value  = max(Result_cen),
             num_Samples = as.numeric(n()),
             num_ss_excursions = as.numeric(sum(Result_cen > SS_Crit)),
@@ -352,11 +355,11 @@ fresh_WS_AU_cat <-  bind_rows(WS_AU_rollup_joined, entero_ws_AU_cat)
 
 AU_display_other <- fresh_AU_summary_no_WS_delist |> 
   select(AU_ID, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
-         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+         final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
 
 AU_display_other_entero <- entero_other_AU_cat |> 
   select(AU_ID, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
-         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+         final_AU_cat, Rationale,stations, recordID, status_change, Year_listed,  year_last_assessed)
 
 
 AU_display_ws <- WS_AU_rollup_joined |> 

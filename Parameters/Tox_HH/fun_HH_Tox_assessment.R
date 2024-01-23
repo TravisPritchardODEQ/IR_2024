@@ -184,7 +184,8 @@ fun_Tox_HH_analysis <-function(df, write_excel = TRUE, database = "IR_Dev"){
     tox_HH_assessment <- df_data %>%
       filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
       group_by_at(group1) %>%
-      summarise(OWRD_Basin = first(OWRD_Basin),
+      summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+                OWRD_Basin = first(OWRD_Basin),
                 Pollu_ID = first(Pollu_ID),
                 crit = max(crit),
                 num_samples = n(),
@@ -254,7 +255,8 @@ fun_Tox_HH_analysis <-function(df, write_excel = TRUE, database = "IR_Dev"){
   WS_GNIS_rollup <- tox_HH_WS_assessments %>%
     ungroup() %>%
     group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
-    summarise(IR_category_GNIS_24 = max(IR_category),
+    summarise(stations =  stringr::str_c(unique(stations), collapse = "; "),
+              IR_category_GNIS_24 = max(IR_category),
               Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
               Delist_eligability = max(Delist_eligability)) %>% 
     mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
@@ -294,7 +296,7 @@ fun_Tox_HH_analysis <-function(df, write_excel = TRUE, database = "IR_Dev"){
   
   AU_display_other <- other_category_delist |> 
     select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
-           final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+           final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
   
   AU_display_ws <- WS_AU_rollup |> 
     rename(prev_category = prev_AU_category,

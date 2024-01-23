@@ -289,7 +289,8 @@ WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({Do_sat_sites*})"
   spawn_cont_categories <- spawn_DO_data %>%
     left_join(spawn_delist_eligability, relationship = "many-to-many") |> 
     group_by_at(group2) %>%
-    summarise(Total_dates = n_distinct(SampleStartDate),
+    summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+              Total_dates = n_distinct(SampleStartDate),
               Total_excursions = sum(Violation),
               Sum_7D_excursions = sum(Violation [Statistical_Base == "7DADMean"]),
               Sum_abs_min_excursions = sum(Violation [Statistical_Base == "Minimum"]),
@@ -454,7 +455,8 @@ WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})
   
   spawn_inst_categories <- DO_sat_data %>%
     group_by_at(group2) %>%
-    summarise(total_samples = n(),
+    summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+              total_samples = n(),
               critical_excursions = binomial_excursions(total_samples, "Conventionals"),
               Total_dates = n_distinct(SampleStartDate),
               Total_excursions = data.table::uniqueN(SampleStartDate[Violation == 1]),
@@ -567,7 +569,7 @@ WS_GNIS_rollup_inst <- spawn_inst_WS_cats %>%
   mutate(Char_Name = 'Dissolved oxygen (DO)') |> 
   mutate(Rationale = paste0(MLocID, ": ", Rationale)) |> 
   ungroup() %>%
-  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
+  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period, stations) %>%
   summarise(IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
@@ -581,7 +583,7 @@ WS_GNIS_rollup_cont <- spawn_cont_WS_cats %>%
   mutate(Char_Name = 'Dissolved oxygen (DO)') |> 
   mutate(Rationale = paste0(MLocID, ": ", Rationale)) |> 
   ungroup() %>%
-  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
+  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period, stations) %>%
   summarise(IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
@@ -624,7 +626,7 @@ other_category_delist <-  assess_delist(other_category, type = "Other") |>
 
 AU_display_other <- other_category_delist |> 
   select(AU_ID, Char_Name,  Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
-         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+         final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
 
 AU_display_ws <- WS_AU_rollup |> 
   rename(prev_category = prev_AU_category,

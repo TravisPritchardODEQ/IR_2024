@@ -115,7 +115,8 @@ ToxAL_Ammonia <- function(database){
       filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
       group_by_at(group1) %>%
       #Summarise data
-      summarise( num_samples = n(),
+      summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+                num_samples = n(),
                 percent_3d = round(sum(Result_Operator == "<" & IRResultNWQSunit > crit )/num_samples * 100),
                 num_fraction_types = n_distinct(Simplfied_Sample_Fraction),
                 num_samples_total_fraction = sum(Simplfied_Sample_Fraction == "Total"),
@@ -188,7 +189,8 @@ ToxAL_Ammonia <- function(database){
   WS_GNIS_rollup <- AL_tox_Ammonia_WS %>%
     ungroup() %>%
     group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
-    summarise(IR_category_GNIS_24 = max(IR_category),
+    summarise(stations =  stringr::str_c(unique(stations), collapse = "; "),
+              IR_category_GNIS_24 = max(IR_category),
               Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
               Delist_eligability = max(Delist_eligability)) %>% 
     mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
@@ -231,7 +233,7 @@ ToxAL_Ammonia <- function(database){
   
   AU_display_other <- other_category_delist |> 
     select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
-           final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+           final_AU_cat, Rationale,stations, recordID, status_change, Year_listed,  year_last_assessed)
   
   AU_display_ws <- WS_AU_rollup |> 
     rename(prev_category = prev_AU_category,
@@ -241,7 +243,23 @@ ToxAL_Ammonia <- function(database){
   
   AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
     mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
-                                 .default = Rationale))
+                                 .default = Rationale))|> 
+    join_TMDL(type = 'AU')|> 
+    join_AU_info() |> 
+    relocate(prev_category, .after = year_last_assessed) |> 
+    relocate(prev_rationale, .after = prev_category) |> 
+    mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
+                                          .default = year_last_assessed)) |> 
+    mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
+                                   .default = NA_character_)) 
+  
+  
+  WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |> 
+    join_TMDL(type = 'GNIS') |> 
+    join_AU_info()|> 
+    relocate(Rationale_GNIS, .after = final_GNIS_cat) |> 
+    relocate(prev_GNIS_category, .after = Rationale_GNIS) |> 
+    relocate(prev_GNIS_rationale, .after = prev_GNIS_category)  
   
     
   AL_ammonia_list <- list(data = Results_censored,

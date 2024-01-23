@@ -101,7 +101,8 @@ coast_AU_summary_no_WS0 <-  coast_contact_geomeans_no_WS %>%
   arrange(MLocID) %>%
   ungroup() %>%
   group_by(AU_ID,  Char_Name, Pollu_ID, wqstd_code ) %>%
-  summarise(num_Samples = as.numeric(n()),
+  summarise( stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+             num_Samples = as.numeric(n()),
             Max_Geomean = ifelse(!all(is.na(geomean)),max(geomean, na.rm = TRUE),NA),
             max.value  = max(Result_cen),
             num_ss_excursions = as.numeric(sum(Result_cen > SS_Crit)),
@@ -222,7 +223,8 @@ coast_AU_summary_WS0 <-  coast_contact_geomeans_WS %>%
   arrange(MLocID) %>%
   ungroup() %>%
   group_by(MLocID, AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, OWRD_Basin ) %>%
-  summarise(num_Samples = as.numeric(n()),
+  summarise( stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+             num_Samples = as.numeric(n()),
             Max_Geomean = ifelse(!all(is.na(geomean)),max(geomean, na.rm = TRUE),NA),
             max.value  = max(Result_cen),
             num_ss_excursions = as.numeric(sum(Result_cen > SS_Crit)),
@@ -267,7 +269,8 @@ coast_AU_summary_WS0 <-  coast_contact_geomeans_WS %>%
 WS_GNIS_rollup <- coast_AU_summary_WS0 %>%
   ungroup() %>%
   group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
-  summarise(IR_category_GNIS_24 = max(IR_category),
+  summarise( stations =  stringr::str_c(unique(stations), collapse = "; "),
+             IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
   mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
@@ -307,7 +310,7 @@ WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup) |>
 
 AU_display_other <- coast_AU_summary_no_WS_delist |> 
   select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
-         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+         final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
 
 # AU_display_ws <- WS_AU_rollup_joined |> 
 #   rename(prev_category = prev_AU_category,

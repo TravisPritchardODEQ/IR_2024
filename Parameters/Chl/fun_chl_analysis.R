@@ -128,7 +128,8 @@ WS_category <- WS_3mo %>%
 WS_GNIS_rollup <- WS_category %>%
   ungroup() %>%
   group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
-  summarise(IR_category_GNIS_24 = max(IR_category),
+  summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+            IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
   mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
@@ -169,12 +170,13 @@ chla_data_month_other <- df %>%
   filter(str_detect(AU_ID, "WS", negate = TRUE)) %>%
   mutate(yearmon = lubridate::floor_date(lubridate::as_date(SampleStartDate), "month")) %>%
   group_by(AU_ID, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  yearmon, Chla_Criteria) %>%
-  summarise(month_average = mean(Result_cen, na.rm = TRUE),
+  summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+            month_average = mean(Result_cen, na.rm = TRUE),
             month_n = n() ) %>%
   ungroup()
 
 other_3mo <- chla_data_month_other %>%
-  group_by(AU_ID, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, month_n) %>%
+  group_by(AU_ID, stations, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, month_n) %>%
   dplyr::mutate(d = runner(x = data.frame(yearmon  = yearmon,
                                           month_average = month_average,
                                           month = as.yearmon(yearmon, "%m/%Y")),
@@ -200,7 +202,7 @@ other_category <- other_3mo %>%
                                        avg_3mo > Chla_Criteria ~ 1,
                                        TRUE ~ 0 ),
          num_month_avg = n()) %>%
-  group_by(AU_ID,  Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin) %>%
+  group_by(AU_ID, stations, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin) %>%
   summarise(total_n = sum(month_n),
             num_monthly_avg = n_distinct(yearmon),
             num_3mo_avg_calculated = sum(!is.na(avg_3mo)),
@@ -265,7 +267,7 @@ other_category_delist <-  assess_delist(other_category, type = "Other")|>
 
 AU_display_other <- other_category_delist |> 
   select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
-         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+         final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
 
 AU_display_ws <- WS_AU_rollup_joined |> 
   rename(prev_category = prev_AU_category,

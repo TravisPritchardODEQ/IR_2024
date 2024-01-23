@@ -409,7 +409,8 @@ WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({continuous_mon_locs*})"
 yr_round_cont_data_categories_other <- yr_round_cont_DO_data_analysis_other %>%
   left_join(year_round_delist_eligability, relationship = "many-to-many") |> 
   group_by_at(group2) %>%
-  summarise(Total_excursions = sum(Violation),
+  summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+            Total_excursions = sum(Violation),
             Sum_30D_excursions = sum(Violation [Statistical_Base == "30DADMean"]),
             Sum_7mi_excursions = sum(Violation [Statistical_Base == "7DADMin"]),
             Sum_abs_min_excursions = sum(Violation [Statistical_Base == "Minimum"]),
@@ -442,7 +443,8 @@ yr_round_cont_data_categories_other <- yr_round_cont_DO_data_analysis_other %>%
 yr_round_cont_categories_class <- yr_round_cont_data_categories_other |>
   mutate(Rationale = paste0(DO_Class, ": ", Rationale)) |> 
   group_by_at(group3) |> 
-  summarise(Total_excursions = sum(Total_excursions),
+  summarise(stations =  stringr::str_c(unique(stations), collapse = "; "),
+            Total_excursions = sum(Total_excursions),
             Sum_30D_excursions = sum(Sum_30D_excursions),
             Sum_7mi_excursions = sum(Sum_7mi_excursions),
             Sum_abs_min_excursions = sum(Sum_abs_min_excursions),
@@ -609,7 +611,8 @@ WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})
   yr_round_instant_categories <- Instant_data_analysis_DOS %>%
     left_join(year_round_delist_eligability, relationship = "many-to-many") |> 
     group_by_at(group2) %>%
-    summarise(OWRD_Basin = first(OWRD_Basin), 
+    summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+              OWRD_Basin = first(OWRD_Basin), 
               num_samples = n(),
               num_critical_samples = sum(is.crit),
               num_excursions = sum(Violation, na.rm = TRUE),
@@ -642,7 +645,8 @@ WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})
   yr_round_instant_categories_class <- yr_round_instant_categories |>
     mutate(Rationale = paste0(DO_Class, ": ", Rationale)) |> 
     group_by_at(group3) |> 
-    summarise(num_samples = sum(num_samples),
+    summarise(stations =  stringr::str_c(unique(stations), collapse = "; "),
+              num_samples = sum(num_samples),
               num_critical_samples = sum(num_critical_samples),
               num_excursions = sum(num_excursions),
               critical_excursions = sum(critical_excursions),
@@ -697,7 +701,7 @@ WS_GNIS_rollup_cont <- WS_categories_cont %>%
   mutate(Char_Name = 'Dissolved oxygen (DO)') |> 
   mutate(Rationale = paste0(MLocID, ": ", Rationale)) |> 
   ungroup() %>%
-  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
+  group_by(AU_ID, AU_GNIS_Name,Char_Name, stations, Pollu_ID, wqstd_code, period) %>%
   summarise(IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
@@ -742,7 +746,7 @@ WS_GNIS_rollup_inst <- WS_categories_inst %>%
   mutate(Char_Name = 'Dissolved oxygen (DO)') |> 
   mutate(Rationale = paste0(MLocID, ": ", Rationale)) |> 
   ungroup() %>%
-  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period) %>%
+  group_by(AU_ID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code, period, stations) %>%
   summarise(IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(Rationale,collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
@@ -808,7 +812,7 @@ other_category_delist <-  assess_delist(other_category, type = "Other")
 
 AU_display_other <- other_category_delist |> 
   select(AU_ID, Char_Name,  Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
-         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+         final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
 
 AU_display_ws <- WS_AU_rollup |> 
   rename(prev_category = prev_AU_category,

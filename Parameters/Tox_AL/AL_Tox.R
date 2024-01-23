@@ -110,12 +110,13 @@ tox_AL_Copper_GNIS_cat          <- Copper_categories[["WS_GNIS_cat"]]
 # Combine ---------------------------------------------------------------------------------------------------------
 
 AU_Decisions <- bind_rows(tox_AL_AU_Decisions,tox_AL_hard_AU_Decisions,tox_AL_penta_AU_Decisions, 
-                          tox_AL_Ammonia_AU_Decisions, tox_AL_Aluminum_AU_Decisions, tox_AL_Copper_AU_Decisions )
+                          tox_AL_Ammonia_AU_Decisions, tox_AL_Aluminum_AU_Decisions, tox_AL_Copper_AU_Decisions ) |> 
+  arrange(AU_ID, Char_Name)
 
 
 GNIS_cat <- bind_rows(tox_AL_GNIS_cat, tox_AL_hard_GNIS_cat, tox_AL_penta_GNIS_cat, tox_AL_Ammonia_GNIS_cat,
-                      tox_AL_Aluminum_GNIS_cat,tox_AL_Copper_GNIS_cat )
-
+                      tox_AL_Aluminum_GNIS_cat,tox_AL_Copper_GNIS_cat ) |> 
+  arrange(AU_ID, Char_Name)
 
 
 
