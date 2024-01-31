@@ -345,6 +345,7 @@ Char_rename2 <- Char_rename |>
 
   
   WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup, char_name_field = Char_Name) 
+  WS_AU_rollup <- WS_AU_prev_list(WS_AU_rollup) 
 
 # Other assessment-----------------------------------------------------------------------------------------------
 
@@ -375,15 +376,15 @@ Char_rename2 <- Char_rename |>
   
   AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
     mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
-                                 .default = Rationale))|> 
+                                 TRUE ~  Rationale))|> 
     join_TMDL(type = 'AU')|> 
     join_AU_info() |> 
     relocate(prev_category, .after = year_last_assessed) |> 
     relocate(prev_rationale, .after = prev_category) |> 
     mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
-                                          .default = year_last_assessed)) |> 
+                                          TRUE ~ year_last_assessed)) |> 
     mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
-                                   .default = NA_character_)) 
+                                   TRUE ~  Year_listed)) 
   
   
   WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |> 

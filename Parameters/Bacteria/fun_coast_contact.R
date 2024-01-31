@@ -10,7 +10,7 @@ coast_contact <- function(df, type = "coast", write_excel = TRUE, database = 'IR
 # Testing and development settings --------------------------------------------------------------------------------
 
 
- #df <- entero_data 
+ #df <- Bacteria_results 
  # type = "coast"
  #write_excel = TRUE
 #database = 'IR_Dev'
@@ -101,16 +101,16 @@ coast_AU_summary_no_WS0 <-  coast_contact_geomeans_no_WS %>%
   arrange(MLocID) %>%
   ungroup() %>%
   group_by(AU_ID,  Char_Name, Pollu_ID, wqstd_code ) %>%
-  summarise( stations =  stringr::str_c(unique(MLocID), collapse = "; "),
-             num_Samples = as.numeric(n()),
+  summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+            num_Samples = as.numeric(n()),
             Max_Geomean = ifelse(!all(is.na(geomean)),max(geomean, na.rm = TRUE),NA),
             max.value  = max(Result_cen),
             num_ss_excursions = as.numeric(sum(Result_cen > SS_Crit)),
             max_ss_excursions_90_day = max(ss_count_excur_90, na.rm = TRUE),
-            max_ss_percent_excursion_90_day = ifelse(!all(is.na(percent_excur_90)),  
-                                                                round(max(percent_excur_90, na.rm = TRUE), 2), 
-                                                                NA_real_),
-            n_90day_percent_exceed = sum(percent_excur_90 > 0.10, na.rm = TRUE),
+            # max_ss_percent_excursion_90_day = ifelse(!all(is.na(percent_excur_90)),  
+            #                                                     round(max(percent_excur_90, na.rm = TRUE), 2), 
+            #                                                     NA_real_),
+            # n_90day_percent_exceed = sum(percent_excur_90 > 0.10, na.rm = TRUE),
             geomeans_calculated = sum(!is.na(geomean)),
             geomean_excursions = ifelse(!is.na(Max_Geomean) &
                                     Max_Geomean > max(Geomean_Crit), "yes", "no"),
@@ -119,25 +119,28 @@ coast_AU_summary_no_WS0 <-  coast_contact_geomeans_no_WS %>%
             mlocs_geomean_exceed = ifelse(geomean_excursions == "yes", str_c(unique(na.omit(MLocID[geomean > Geomean_Crit]), collapse = "; ")),NA),
             ss_exceed_date_periods = str_c(unique(SampleStartDate[Result_cen > SS_Crit]), collapse =  "; ")
               ) %>%
-  mutate(IR_category = case_when(geomean_excursions == "yes" ~ "5",
-                                 max_ss_percent_excursion_90_day > 0.10 ~ "5",
-                                 geomeans_calculated == 0 & num_ss_excursions > 0 ~ "3B",
-                                 geomeans_calculated == 0 & num_ss_excursions == 0 ~ "3",
-                                 geomeans_calculated >= 1 & geomean_excursions == "no" & max_ss_percent_excursion_90_day <= 0.10 ~ '2',
+    mutate(critical_excursions = binomial_excursions(num_Samples, type = "Conventionals"),
+           IR_category = case_when(geomean_excursions == "yes" ~ "5",
+                                   num_ss_excursions > critical_excursions & num_Samples >= 5 ~ "5",
+                                   num_ss_excursions <= critical_excursions & num_Samples >= 5~ '2',
+                                   geomeans_calculated == 0 & num_ss_excursions > 0 ~ "3B",
+                                   geomeans_calculated == 0 & num_ss_excursions == 0 ~ "3",
+                                   TRUE ~ "ERROR"),
+           Rationale = case_when(geomean_excursions == "yes" ~ paste0(n_geomean_excursions, 
+                                                                      " geometric means exceed geomean criteria in time periods ",
+                                                                      geomean_exceed_date_periods),
+                                 num_ss_excursions > critical_excursions & num_Samples >= 5 ~ paste0(n_geomean_excursions, 
+                                                                                                     " geometric means exceed geomean criteria. Single sample exceedance rate > 10% ccording to the exact binomial test"),
+                                 num_ss_excursions <= critical_excursions & num_Samples >= 5 ~ paste0("Attaining: ", num_ss_excursions, " excursions is less than ",
+                                                                                                      critical_excursions, " needed to list- ",
+                                                                                                      num_Samples, " total samples"),
+                                 geomeans_calculated == 0 & num_ss_excursions > 0 ~ paste0("No 90 day period has at least 5 results. ", 
+                                                                                           num_ss_excursions, " single sample excursions"),
+                                 geomeans_calculated == 0 & num_ss_excursions == 0 ~ paste0("No 90 day period has at least 5 results. ", 
+                                                                                            num_ss_excursions, " single sample excursions"),
+                                 geomeans_calculated >= 1 & geomean_excursions == "no" & num_ss_excursions <= critical_excursions   ~ "No excursions of geometric mean. No 90 day period > 10% single sample exceedance rate",
                                  TRUE ~ "ERROR"),
-         Rationale = case_when(geomean_excursions == "yes" ~ paste0(n_geomean_excursions, 
-                                                                    " geometric means exceed geomean criteria in time periods ",
-                                                                    geomean_exceed_date_periods),
-                               max_ss_percent_excursion_90_day > 0.10 ~ paste0(n_geomean_excursions, 
-                                                                               " geometric means exceed geomean criteria. Single sample exceedance rate > 10% ",
-                                                                               n_90day_percent_exceed, " times"),
-                               geomeans_calculated == 0 & num_ss_excursions > 0 ~ paste0("No 90 day period has at least 5 results. ", 
-                                                                                         num_ss_excursions, " single sample excursions"),
-                               geomeans_calculated == 0 & num_ss_excursions == 0 ~ paste0("No 90 day period has at least 5 results. ", 
-                                                                                          num_ss_excursions, " single sample excursions"),
-                               geomeans_calculated >= 1 & geomean_excursions == "no" & max_ss_percent_excursion_90_day <= 0.10 ~ "No excursions of geometric mean. No 90 day period > 10% single sample exceedance rate",
-                               TRUE ~ "ERROR"),
-         ) %>%
+    ) %>%
   mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code ),
          period = NA_character_) |> 
   mutate(Delist_eligability = case_when(num_Samples >= 18 & num_ss_excursions <= binomial_delisting(num_Samples, 'Conventionals') & IR_category == '2' ~ 1,
@@ -241,25 +244,30 @@ coast_AU_summary_WS0 <-  coast_contact_geomeans_WS %>%
             mlocs_geomean_exceed = ifelse(geomean_excursions == "yes", str_c(unique(na.omit(MLocID[geomean > Geomean_Crit]), collapse = "; ")),NA),
             ss_exceed_date_periods = str_c(unique(SampleStartDate[Result_cen > SS_Crit]), collapse =  "; ")
   ) %>%
-  mutate(IR_category = case_when(geomean_excursions == "yes" ~ "5",
-                                 max_ss_percent_excursion_90_day > 0.10 ~ "5",
+  mutate(critical_excursions = binomial_excursions(num_Samples, type = "Conventionals"),
+         IR_category = case_when(geomean_excursions == "yes" ~ "5",
+                                 num_ss_excursions > critical_excursions & num_Samples >= 5 ~ "5",
+                                 num_ss_excursions <= critical_excursions & num_Samples >= 5~ '2',
                                  geomeans_calculated == 0 & num_ss_excursions > 0 ~ "3B",
                                  geomeans_calculated == 0 & num_ss_excursions == 0 ~ "3",
-                                 geomeans_calculated >= 1 & geomean_excursions == "no" & max_ss_percent_excursion_90_day <= 0.10 ~ '2',
-                                 TRUE ~ "ERROR"),
-         Rationale = case_when(geomean_excursions == "yes" ~ paste0("Impaired: ", n_geomean_excursions, 
+                                                                  TRUE ~ "ERROR"),
+         Rationale = case_when(geomean_excursions == "yes" ~ paste0(n_geomean_excursions, 
                                                                     " geometric means exceed geomean criteria in time periods ",
                                                                     geomean_exceed_date_periods),
-                               max_ss_percent_excursion_90_day > 0.10 ~ paste0("Impaired: ", n_geomean_excursions, 
-                                                                               " geometric means exceed geomean criteria. Single sample exceedance rate > 10% ",
-                                                                               n_90day_percent_exceed, " times"),
-                               geomeans_calculated == 0 & num_ss_excursions > 0 ~ paste0("Insufficient data: ", "No 90 day period has at least 5 results. ", 
+                               num_ss_excursions > critical_excursions & num_Samples >= 5 ~ paste0(n_geomean_excursions, 
+                                                                                                   " geometric means exceed geomean criteria. Single sample exceedance rate > 10% ccording to the exact binomial test"),
+                               num_ss_excursions <= critical_excursions & num_Samples >= 5 ~ paste0("Attaining: ", num_ss_excursions, " excursions is less than ",
+                                                                                                    critical_excursions, " needed to list- ",
+                                                                                                    num_Samples, " total samples"),
+                               geomeans_calculated == 0 & num_ss_excursions > 0 ~ paste0("No 90 day period has at least 5 results. ", 
                                                                                          num_ss_excursions, " single sample excursions"),
-                               geomeans_calculated == 0 & num_ss_excursions == 0 ~ paste0("Insufficient data: ","No 90 day period has at least 5 results. ", 
+                               geomeans_calculated == 0 & num_ss_excursions == 0 ~ paste0("No 90 day period has at least 5 results. ", 
                                                                                           num_ss_excursions, " single sample excursions"),
-                               geomeans_calculated >= 1 & geomean_excursions == "no" & max_ss_percent_excursion_90_day <= 0.10 ~ "Attaining: No excursions of geometric mean. No 90 day period > 10% single sample exceedance rate",
+                               geomeans_calculated >= 1 & geomean_excursions == "no" & num_ss_excursions <= critical_excursions   ~ "No excursions of geometric mean. No 90 day period > 10% single sample exceedance rate",
                                TRUE ~ "ERROR"),
   ) %>%
+  mutate(recordID = paste0("2022-",odeqIRtools::unique_AU(AU_ID),"-", Pollu_ID, "-", wqstd_code ),
+         period = NA_character_) |> 
   mutate(IR_category = factor(IR_category, levels=c("3", "3B", "2", "5" ), ordered=TRUE)) |> 
   mutate(Delist_eligability = case_when(num_Samples >= 18 & num_ss_excursions <= binomial_delisting(num_Samples, 'Conventionals') & IR_category == '2' ~ 1,
                                         TRUE ~ 0)) |> 
@@ -329,7 +337,12 @@ AU_display <- AU_display_other |>
   join_TMDL(type = 'AU')|> 
   join_AU_info() |> 
   relocate(prev_category, .after = year_last_assessed) |> 
-  relocate(prev_rationale, .after = prev_category) 
+  relocate(prev_rationale, .after = prev_category) |> 
+  mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
+                                        TRUE ~ year_last_assessed)) |> 
+  mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
+                                 TRUE ~  Year_listed)) 
+
 
 if(write_excel){
   print("Writing excel doc")

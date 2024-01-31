@@ -27,6 +27,7 @@ req_inst_crit_samples <- 8
 
 Results_spawndates <- df %>%
   mutate(SampleStartDate = ymd(SampleStartDate),
+         SampleStartTime = stringr::str_sub(SampleStartTime, start = 1, end=5),
          SpawnStart = ifelse(!is.na(SpawnStart), paste0(SpawnStart, "/",year(SampleStartDate) ), SpawnStart ),
          SpawnEnd= ifelse(!is.na(SpawnEnd), paste0(SpawnEnd, "/", year(SampleStartDate)), SpawnEnd ),
          SpawnStart = mdy(SpawnStart),
@@ -295,7 +296,9 @@ WHERE        (Statistical_Base = 'Mean') AND AU_ID in ({continuous_mon_locs*})"
     left_join(perc_sat_temp_join, by = c('MLocID', 'SampleStartDate', 'SampleStartTime', 'Statistical_Base')) %>%
     mutate(DO_sat = ifelse(is.na(DO_sat),DOSat_calc(DO_res, Temp_res, ELEV_Ft ), DO_sat),
            ma.DOS.mean30 = "") %>%
-    mutate(DO_sat = ifelse(DO_sat > 100, 100, DO_sat ))
+    mutate(DO_sat = ifelse(DO_sat > 100, 100, DO_sat )) |> 
+    mutate(SampleStartTime = stringr::str_sub(SampleStartTime, start = 1, end=5),
+           DO_sat = round(DO_sat,digits = 1))
   
   # calculate 30-D averages
   
@@ -511,10 +514,10 @@ yr_round_inst_function <- function(df = Results_spawndates, continuous_list = re
                                 ifelse(num_critical_samples < 5 & 
                                          num_below_crit == 0, "Cat 3", 
                                        ifelse(num_critical_samples >= 5 &
-                                                num_below_crit > critical_excursions &
+                                                num_below_crit >= critical_excursions &
                                                 DO_Class != "Cold Water", "Cat 5", 
                                               ifelse(num_critical_samples >= 5 &
-                                                       num_below_crit > critical_excursions &
+                                                       num_below_crit >= critical_excursions &
                                                        DO_Class == "Cold Water", "Check percent Sat",
                                                      ifelse(num_critical_samples >= 5 &
                                                               num_below_crit <= critical_excursions, "Cat 2", "ERROR" ))))))
@@ -588,7 +591,9 @@ WHERE        ((Statistical_Base = 'Minimum') AND MLocID in ({instant_mon_locs*})
     select(MLocID, SampleStartDate, SampleStartTime, Statistical_Base, act_depth_height,DO_sat ) %>%
     mutate(SampleStartDate = as.Date(parse_date_time(SampleStartDate, c("mdy", "ymd")))) |> 
     group_by(MLocID, SampleStartDate, SampleStartTime , Statistical_Base, act_depth_height) |> 
-    filter(row_number() == 1)
+    filter(row_number() == 1) |> 
+    mutate(SampleStartTime = stringr::str_sub(SampleStartTime, start = 1, end=5),
+           DO_sat = round(DO_sat,digits = 1))
   
   
   #DATA
@@ -800,7 +805,7 @@ WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS') |>
 
 WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup_delist, char_name_field = Char_Name)
 
-
+WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup) 
 
 # Combine AU decisions --------------------------------------------------------------------------------------------
 Other_categories <- bind_rows(year_round_inst_other_categories, year_round_cont_other_categories)
@@ -814,7 +819,7 @@ AU_display_other <- other_category_delist |>
   select(AU_ID, Char_Name,  Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
          final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
 
-AU_display_ws <- WS_AU_rollup |> 
+AU_display_ws <- WS_AU_rollup_joined |> 
   rename(prev_category = prev_AU_category,
          prev_rationale = prev_AU_rationale,
          final_AU_cat = IR_category_AU_24,
@@ -828,9 +833,9 @@ AU_display <- bind_rows(AU_display_other, AU_display_ws) |>
   relocate(prev_category, .after = year_last_assessed) |> 
   relocate(prev_rationale, .after = prev_category) |> 
   mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
-                                        .default = year_last_assessed)) |> 
+                                        TRUE ~ year_last_assessed)) |> 
   mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
-                                 .default = Year_listed)) |> 
+                                 TRUE ~  Year_listed))  |> 
   mutate(Char_Name = 'Dissolved oxygen (DO)')
 
 

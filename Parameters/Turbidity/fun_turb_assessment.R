@@ -38,12 +38,14 @@ turb_assessment <- df_data %>%
   filter(str_detect(AU_ID, "WS", negate = inverse)) %>%
   group_by_at(group1) %>%
   #group_by(AU_ID,  Pollu_ID, wqstd_code,  OWRD_Basin, year) %>%
-  summarise(total_n = n(),
+  summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+            total_n = n(),
             total_excursions = sum(excursion),
             total_excursion_day = n_distinct(SampleStartDate[excursion == 1])) %>%
   ungroup() %>%
   group_by_at(group2) %>%
-  summarise(IR_category = case_when(max(total_excursion_day) > 45 ~ "5",
+  summarise(stations =  stringr::str_c(unique(stations), collapse = "; "),
+            IR_category = case_when(max(total_excursion_day) > 45 ~ "5",
                                     max(total_excursion_day) <= 45 ~ "2"),
             Rationale = case_when(max(total_excursion_day) > 45 ~ paste0("Impaired: ",str_c( year[total_excursion_day > 45], ': ', total_excursion_day[total_excursion_day > 45], " high turbidity days", collapse = "; ")),
                                   max(total_excursion_day) <= 45 ~ "Attaining: All years of data show 45 or less high turbidity days per year."))%>%
@@ -67,7 +69,8 @@ Turb_WS <- turb_cat_fun(df_data = turb_data, AU_type = "WS")
 WS_GNIS_rollup <- Turb_WS %>%
   ungroup() %>%
   group_by(AU_ID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code, period) %>%
-  summarise(IR_category_GNIS_24 = max(IR_category),
+  summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+            IR_category_GNIS_24 = max(IR_category),
             Rationale_GNIS = str_c(str_unique(Rationale),collapse =  " ~ " ),
             Delist_eligability = max(Delist_eligability)) %>% 
   mutate(Delist_eligability = case_when(Delist_eligability == 1 & IR_category_GNIS_24 == '2'~ 1,
@@ -88,6 +91,7 @@ WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')
 
 ## AU Rollup -------------------------------------------------------------------------------------------------------
 WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup, char_name_field = Char_Name) 
+WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup) 
 
 # Other assessment ------------------------------------------------------------------------------------------------
 
@@ -108,9 +112,9 @@ other_category_delist <-  assess_delist(other_category, type = "Other")  |>
 
 AU_display_other <- other_category_delist |> 
   select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
-         final_AU_cat, Rationale, recordID, status_change, Year_listed,  year_last_assessed)
+         final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
 
-AU_display_ws <- WS_AU_rollup |> 
+AU_display_ws <- WS_AU_rollup_joined |> 
   rename(prev_category = prev_AU_category,
          prev_rationale = prev_AU_rationale,
          final_AU_cat = IR_category_AU_24,
@@ -124,11 +128,12 @@ AU_display <- bind_rows(AU_display_other, AU_display_ws) |>
   relocate(prev_category, .after = year_last_assessed) |> 
   relocate(prev_rationale, .after = prev_category) |> 
   mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
-                                        .default = year_last_assessed)) |> 
+                                        TRUE ~ year_last_assessed)) |> 
   mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
-                                 .default = year_last_assessed)) |> 
+                                 TRUE ~ year_last_assessed)) |> 
   mutate(status_change = case_when(is.na(status_change) ~ paste(prev_category, "to", final_AU_cat),
-                                   .default = status_change))
+                                   TRUE ~  status_change)) |> 
+  mutate(Char_Name = 'Turbidity')
 
 # Export ----------------------------------------------------------------------------------------------------------
 

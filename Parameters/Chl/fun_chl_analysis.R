@@ -36,14 +36,16 @@ chl_assessment <- function(df, write_excel = TRUE, database = 'IR_Dev'){
 chla_data_month_ws <- df %>%
   filter(str_detect(AU_ID, "WS", negate = FALSE)) %>%
   mutate(yearmon = lubridate::floor_date(lubridate::as_date(SampleStartDate), "month")) %>%
-  group_by(AU_ID, MLocID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  yearmon, Chla_Criteria) %>%
+  group_by(AU_ID, MLocID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code,  yearmon, Chla_Criteria) %>%
   summarise(month_average = mean(Result_cen, na.rm = TRUE),
             month_n = n() ) %>%
   ungroup()
 
 WS_3mo <- chla_data_month_ws %>%
-  group_by(AU_ID, MLocID, AU_GNIS_Name, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, yearmon) %>%
-  dplyr::mutate(d = runner(x = data.frame(yearmon  = yearmon,
+  ungroup() |> 
+  #filter(AU_ID == 'OR_WS_170703010301_05_102282') |> 
+  group_by(AU_ID, MLocID, Chla_Criteria) %>%
+  dplyr::mutate(d = runner(x = data.frame(yearmon  = ymd(yearmon),
                                           month_average = month_average,
                                           month = as.yearmon(yearmon, "%m/%Y")),
                            k = "3 months",
@@ -63,13 +65,13 @@ WS_3mo <- chla_data_month_ws %>%
 
 
 WS_category <- WS_3mo %>%
-  group_by(AU_ID, MLocID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, yearmon) %>%
+  group_by(AU_ID, MLocID, AU_GNIS_Name,Char_Name, Pollu_ID, wqstd_code,  Chla_Criteria, yearmon) %>%
   mutate(month = as.yearmon(yearmon, "%m/%Y"),
          avg_3mo_excursion = case_when(is.na(avg_3mo) ~ 0,
                                       avg_3mo > Chla_Criteria ~ 1,
                                       TRUE ~ 0 ),
          num_month_avg = n()) %>%
-  group_by(AU_ID, MLocID, AU_GNIS_Name, Char_Name,  Pollu_ID, wqstd_code,  OWRD_Basin) %>%
+  group_by(AU_ID, MLocID, AU_GNIS_Name, Char_Name,  Pollu_ID, wqstd_code) %>%
   summarise(total_n = sum(month_n),
             num_monthly_avg = n_distinct(yearmon),
             num_3mo_avg_calculated = sum(!is.na(avg_3mo)),
@@ -169,15 +171,20 @@ WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup) |>
 chla_data_month_other <- df %>%
   filter(str_detect(AU_ID, "WS", negate = TRUE)) %>%
   mutate(yearmon = lubridate::floor_date(lubridate::as_date(SampleStartDate), "month")) %>%
-  group_by(AU_ID, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  yearmon, Chla_Criteria) %>%
-  summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
+  group_by(AU_ID, Char_Name, Pollu_ID, wqstd_code) %>%
+  mutate(stations =  stringr::str_c(unique(MLocID), collapse = "; ")) |> 
+  group_by(AU_ID, Char_Name, Pollu_ID, wqstd_code,  yearmon, Chla_Criteria) %>%
+  summarise(stations =  stringr::str_c(unique(stations), collapse = "; "),
             month_average = mean(Result_cen, na.rm = TRUE),
             month_n = n() ) %>%
   ungroup()
 
 other_3mo <- chla_data_month_other %>%
-  group_by(AU_ID, stations, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin,  Chla_Criteria, month_n) %>%
-  dplyr::mutate(d = runner(x = data.frame(yearmon  = yearmon,
+  ungroup() |> 
+  #filter(AU_ID == 'OR_LK_1707030101_05_100050') |> 
+  group_by(AU_ID) %>%
+  arrange(AU_ID, yearmon) |> 
+  dplyr::mutate(d = runner(x = data.frame(yearmon  = ymd(yearmon),
                                           month_average = month_average,
                                           month = as.yearmon(yearmon, "%m/%Y")),
                            k = "3 months",
@@ -202,8 +209,9 @@ other_category <- other_3mo %>%
                                        avg_3mo > Chla_Criteria ~ 1,
                                        TRUE ~ 0 ),
          num_month_avg = n()) %>%
-  group_by(AU_ID, stations, Char_Name, Pollu_ID, wqstd_code,  OWRD_Basin) %>%
-  summarise(total_n = sum(month_n),
+  group_by(AU_ID, Char_Name, Pollu_ID, wqstd_code) %>%
+  summarise(stations =  stringr::str_c(unique(stations), collapse = "; "),
+            total_n = sum(month_n),
             num_monthly_avg = n_distinct(yearmon),
             num_3mo_avg_calculated = sum(!is.na(avg_3mo)),
             num_excur_3mo_avg = sum(avg_3mo_excursion),
@@ -282,7 +290,11 @@ AU_display <- bind_rows(AU_display_other, AU_display_ws) |>
   join_TMDL(type = 'AU')|> 
   join_AU_info() |> 
   relocate(prev_category, .after = year_last_assessed) |> 
-  relocate(prev_rationale, .after = prev_category) 
+  relocate(prev_rationale, .after = prev_category) |> 
+  mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
+                                        TRUE ~ year_last_assessed)) |> 
+  mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
+                                 TRUE ~  Year_listed)) 
   
 
 WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |> 

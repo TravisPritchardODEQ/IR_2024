@@ -264,7 +264,7 @@ pH_assessment <- function(cont_data, grab_data, write_xlsx = TRUE){
   
   
   WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup, char_name_field = Char_Name)
-  
+  WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup) 
   
   
   # Other AUs ------------------------------------------------------------------------------------------------------- 
@@ -285,7 +285,7 @@ pH_assessment <- function(cont_data, grab_data, write_xlsx = TRUE){
     select(AU_ID, Char_Name,  Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
            final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
   
-  AU_display_ws <- WS_AU_rollup |> 
+  AU_display_ws <- WS_AU_rollup_joined |> 
     rename(prev_category = prev_AU_category,
            prev_rationale = prev_AU_rationale,
            final_AU_cat = IR_category_AU_24,
@@ -300,9 +300,9 @@ pH_assessment <- function(cont_data, grab_data, write_xlsx = TRUE){
     relocate(prev_category, .after = year_last_assessed) |> 
     relocate(prev_rationale, .after = prev_category) |> 
     mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment' ~ "2024",
-                                          .default = year_last_assessed)) |> 
+                                          TRUE  ~ year_last_assessed)) |> 
     mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
-                                   .default = NA_character_)) 
+                                   TRUE  ~ Year_listed)) 
   
 
   

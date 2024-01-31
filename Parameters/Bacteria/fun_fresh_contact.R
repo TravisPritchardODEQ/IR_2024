@@ -78,7 +78,7 @@ fresh_contact_geomeans <- fresh_contact %>%
                            idx = SampleStartDate,
                            f = function(x) list(x))) %>%
   dplyr::mutate(d = purrr::map(d, ~ .x %>%
-                                 dplyr::summarise(geomean = dplyr::case_when(length(SampleStartDate) >= 5 ~  geo_mean(Result_cen),
+                                 dplyr::summarise(geomean = dplyr::case_when(dplyr::n_distinct(SampleStartDate) >= 5 ~  geo_mean(Result_cen),
                                                                              TRUE ~ NA_real_),
                                                   count_90 = dplyr::n_distinct(SampleStartDate),
                                                   dates_90 = stringr::str_c(unique(SampleStartDate),  collapse = "; "),
@@ -244,7 +244,7 @@ fresh_contact_geomeans_other <- fresh_contact %>%
                            idx = SampleStartDate,
                            f = function(x) list(x))) %>%
   dplyr::mutate(d = purrr::map(d, ~ .x %>%
-                                 dplyr::summarise(geomean = dplyr::case_when(length(SampleStartDate) >= 5 ~  geo_mean(Result_cen),
+                                 dplyr::summarise(geomean = dplyr::case_when(dplyr::n_distinct(SampleStartDate) >= 5 ~  geo_mean(Result_cen),
                                                                              TRUE ~ NA_real_),
                                                   count_90 = dplyr::n_distinct(SampleStartDate),
                                                   dates_90 = stringr::str_c(unique(SampleStartDate),  collapse = "; "),
@@ -288,7 +288,7 @@ fresh_AU_summary_no_WS0 <-  fresh_contact_geomeans_other %>%
                                  is.na(Max_Geomean) & num_Samples >= 5 & num_ss_excursions < critical_excursions ~ "2",
                                  TRUE ~ "ERROR"),
          Rationale = case_when(geomean_over == 1 ~ paste0("Impaired: Geomean exceed criteria value of ", Geomean_Crit, " for time periods ",geomean_exceed_date_periods, "- ",num_Samples, " total samples"  ),
-                               num_Samples >= 5 & num_ss_excursions > critical_excursions ~  paste0("Impaired: Single samples exceed criteria value of ",
+                               num_Samples >= 5 & num_ss_excursions >= critical_excursions ~  paste0("Impaired: Single samples exceed criteria value of ",
                                                                                                    SS_Crit, " ", num_ss_excursions, ' times on ', 
                                                                                                    ss_exceed_date_periods, " at ", mlocs_ss_exceed,   "- ",num_Samples, " total samples" ),
                                is.na(Max_Geomean) & max.value < SS_Crit & num_Samples < 5 ~ paste0("Insufficient Data: ",
@@ -300,7 +300,7 @@ fresh_AU_summary_no_WS0 <-  fresh_contact_geomeans_other %>%
                                                                                                   num_ss_excursions, 
                                                                                                   " excursions", "- ",num_Samples, " total samples at ", mlocs  ),
                                !is.na(Max_Geomean) & Max_Geomean <= Geomean_Crit ~ paste0("Attaining: No geomean above criteria", "- ",num_Samples, " total samples at ", mlocs ),
-                               is.na(Max_Geomean) & num_Samples >= 5 & num_ss_excursions <= critical_excursions ~ paste0("Attaining: No geomean calculated. Single sample excursions below binomial", "- ",num_Samples, " total samples at", mlocs  ),
+                               is.na(Max_Geomean) & num_Samples >= 5 & num_ss_excursions < critical_excursions ~ paste0("Attaining: No geomean calculated. Single sample excursions below binomial", "- ",num_Samples, " total samples at", mlocs  ),
                                TRUE ~ "ERROR"
          )) %>%
   mutate(Delist_eligability = case_when(num_Samples >= 18 & num_ss_excursions <= binomial_delisting(num_Samples, 'Conventionals') & (Max_Geomean < Geomean_Crit | is.na(Max_Geomean) & IR_category == '2') ~ 1,
@@ -382,7 +382,11 @@ AU_display <- bind_rows(AU_display_other, AU_display_other_entero, AU_display_ws
   join_TMDL(type = 'AU')|> 
   join_AU_info() |> 
   relocate(prev_category, .after = year_last_assessed) |> 
-  relocate(prev_rationale, .after = prev_category) 
+  relocate(prev_rationale, .after = prev_category) |> 
+  mutate(year_last_assessed = case_when(status_change != 'No change in status- No new assessment'  ~ "2024",
+                                        TRUE ~ year_last_assessed)) |> 
+  mutate(Year_listed = case_when(final_AU_cat %in% c("5", '4A') & is.na(Year_listed) ~ '2024',
+                                 TRUE ~  Year_listed)) 
 
 
 WS_GNIS_rollup_delist <- WS_GNIS_rollup_delist |> 
