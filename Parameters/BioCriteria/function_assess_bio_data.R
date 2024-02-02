@@ -103,14 +103,14 @@ WCCP_AU_MS_WS = Results_import %>%
   mutate(num_Samples = n()) %>%
   filter(num_Samples >= 2) %>%
   summarise(num_Samples = n(),
-            n_over_5 = sum(Score >= 22),
-            n_btwn_3C = sum(Score >= 8 & Score <= 21),
-            n_less_3C = sum(Score <= 7),
-            mean_all_samples = mean(as.numeric(Score))) %>%
-  mutate(IR_Cat = case_when(mean_all_samples >= 22 ~"5",
-                                mean_all_samples >= 8 & mean_all_samples <= 21 ~ "3C",
-                                mean_all_samples <= 7 ~ "2",
-                                TRUE ~ "ERROR"),
+            mean_all_samples = mean(as.numeric(Score)),
+            n_over_5 = sum(as.numeric(mean_all_samples) >= 22),
+            n_btwn_3C = sum(as.numeric(mean_all_samples) >= 8 & as.numeric(mean_all_samples) <= 21),
+            n_less_3C = sum(as.numeric(mean_all_samples) <= 7))%>%
+  mutate(IR_Cat = case_when(n_over_5 >=1 ~"5",
+                            n_btwn_3C >= 1 ~ "3C",
+                            n_less_3C >= 1 ~ "2",
+                            TRUE ~ "ERROR"),
          n_btwn_3B = NA,
          model = "WCCP") %>% 
   select("AU_ID","MLocID","num_Samples","mean_all_samples","n_over_5","n_btwn_3B",
@@ -193,7 +193,6 @@ MWCF_SS_SR <- Results_import %>%
             n_less_3C = sum(as.numeric(Score) <= 8),
             MLocIDs = paste(MLocID,collapse = " ; ")) %>%
   mutate(IR_Cat = case_when(n_over_5 >=1 ~"5",
-                            n_btwn_3B >=1 ~"3B",
                             n_btwn_3C >= 1 ~ "3C",
                             n_less_3C  >= 1 ~ "2",
                             TRUE ~ "ERROR"),
@@ -209,14 +208,14 @@ MWCF_MS_SR = Results_import %>%
   mutate(num_Samples = n()) %>%
   filter(num_Samples >= 2) %>%
   summarise(num_Samples = n(),
-            n_over_5 = sum(as.numeric(Score) >= 15),
-            n_btwn_3C = sum(as.numeric(Score) >= 9 & as.numeric(Score) <= 14),
-            n_less_3C = sum(as.numeric(Score) <= 8),
             mean_all_samples = mean(as.numeric(Score)),
+            n_over_5 = sum(as.numeric(mean_all_samples) >= 15),
+            n_btwn_3C = sum(as.numeric(mean_all_samples) >= 9 & as.numeric(mean_all_samples) <= 14),
+            n_less_3C = sum(as.numeric(mean_all_samples) <= 8),
             MLocIDs = paste(MLocID,collapse = " ; ")) %>%
-  mutate(IR_Cat = case_when(mean_all_samples >= 15 ~"5",
-                            mean_all_samples >= 9 & mean_all_samples <= 14 ~ "3C",
-                            mean_all_samples <= 8 ~ "2",
+  mutate(IR_Cat = case_when(n_over_5 >=1 ~"5",
+                            n_btwn_3C >= 1 ~ "3C",
+                            n_less_3C  >= 1 ~ "2",
                             TRUE ~ "ERROR"),
          n_btwn_3B = NA,
          model = "MWCF") %>% 
@@ -231,10 +230,10 @@ WCCP_SS_SR = Results_import %>%
   mutate(num_Samples = n()) %>%
   filter(num_Samples == 1) %>%
   summarise(num_Samples = n(),
-            n_over_5 = sum(Score >= 27),
-            n_btwn_3B = sum(Score >= 22 & Score <= 26),
-            n_btwn_3C = sum(Score >= 8 & Score <= 21),
-            n_less_3C = sum(Score <= 7),
+            n_over_5 = sum(as.numeric(Score) >= 27),
+            n_btwn_3B = sum(as.numeric(Score) >= 22 & as.numeric(Score) <= 26),
+            n_btwn_3C = sum(as.numeric(Score) >= 8 & as.numeric(Score) <= 21),
+            n_less_3C = sum(as.numeric(Score) <= 7),
             MLocIDs = paste(MLocID,collapse = " ; ")) %>%
   mutate(IR_Cat = case_when( n_over_5 >=1 ~"5",
                              n_btwn_3B >=1 ~"3B",
@@ -254,15 +253,15 @@ WCCP_MS_SR = Results_import %>%
   mutate(num_Samples = n()) %>%
   filter(num_Samples >= 2) %>%
   summarise(num_Samples = n(),
-            n_over_5 = sum(Score >= 22),
-            n_btwn_3C = sum(Score >= 8 & Score <= 21),
-            n_less_3C = sum(Score <= 7),
             mean_all_samples = mean(as.numeric(Score)),
+            n_over_5 = sum(as.numeric(mean_all_samples) >= 22),
+            n_btwn_3C = sum(as.numeric(mean_all_samples) >= 8 & as.numeric(mean_all_samples) <= 21),
+            n_less_3C = sum(as.numeric(mean_all_samples) <= 7),
             MLocIDs = paste(MLocID,collapse = " ; ")) %>%
-  mutate(IR_Cat = case_when(mean_all_samples >= 22 ~"5",
-                            mean_all_samples >= 8 & mean_all_samples <= 21 ~ "3C",
-                            mean_all_samples <= 7 ~ "2",
-                            TRUE ~ "ERROR"),
+  mutate(IR_Cat = case_when( n_over_5 >=1 ~"5",
+                             n_btwn_3C >= 1 ~ "3C",
+                             n_less_3C >= 1 ~ "2",
+                             TRUE ~ "ERROR"),
          n_btwn_3B = NA,
          model = "WCCP") %>% 
   select("AU_ID","num_Samples","mean_all_samples","n_over_5","n_btwn_3B",
