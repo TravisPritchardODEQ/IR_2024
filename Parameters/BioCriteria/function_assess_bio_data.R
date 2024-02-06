@@ -166,7 +166,9 @@ WS_GNIS_rollup <- join_prev_assessments(WS_GNIS_rollup, AU_type = "WS")  |>
 ### Delist process --------------------------------------------------------------------------------------------------
 
 
-WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')
+WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')|> 
+  mutate(Char_Name = 'BioCriteria') |> 
+  relocate(Char_Name, .after = AU_GNIS_Name)
 
 ### AU Rollup -------------------------------------------------------------------------------------------------------
 
@@ -290,7 +292,9 @@ Other_categories <- rbind(MWCF_SS_SR,MWCF_MS_SR,WCCP_SS_SR,WCCP_MS_SR) %>%
 
 other_category <- join_prev_assessments(Other_categories, AU_type = 'Other')
 
-other_category_delist <-  assess_delist(other_category, type = "Other")
+other_category_delist <-  assess_delist(other_category, type = "Other")|> 
+  mutate(Char_Name = 'BioCriteria') |> 
+  relocate(Char_Name, .after = AU_ID)
 
 
 # prep data for export --------------------------------------------------------------------------------------------

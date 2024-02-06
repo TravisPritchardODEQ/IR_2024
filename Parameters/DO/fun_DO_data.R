@@ -3,6 +3,7 @@ require(RODBC)
 library(tidyverse)
 library(odeqIRtools)
 library(openxlsx)
+library(tidyverse)
 
 
 
@@ -30,6 +31,12 @@ DO_data <- function(database) {
   Results_import %>% map_if(is.factor, as.character) %>% as_data_frame -> Results_import
   
   Results_import <- odeqIRtools::data_aggregation(Results_import)
+  
+  Results_import <- Results_import |> 
+    group_by(MLocID, SampleStartDate,Statistical_Base ) |> 
+    slice_min(IRResultNWQSunit, n = 1) |> 
+    filter(row_number() == 1)
+
   
   
   # Data aggregation --------------------------------------------------------

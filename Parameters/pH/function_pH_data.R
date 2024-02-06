@@ -27,6 +27,9 @@ cont_ph_raw <- function(database) {
   Results_import_grab %>% map_if(is.factor, as.character) %>% as_tibble -> Results_import_grab
   
   
+  Results_import_grab  <- Results_import_grab|> 
+    mutate(Result_UID = as.character(Result_UID))
+  
   Results_import_grab <- odeqIRtools::data_aggregation(Results_import_grab)
   
   # Data censoring --------------------------------------------------------------------------------------------------

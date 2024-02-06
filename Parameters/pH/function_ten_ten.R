@@ -257,13 +257,15 @@ pH_assessment <- function(cont_data, grab_data, write_xlsx = TRUE){
   ### Delist process --------------------------------------------------------------------------------------------------
   
   
-  WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')
+  WS_GNIS_rollup_delist <- assess_delist(WS_GNIS_rollup, type = 'WS')|> 
+    mutate(Char_Name = 'pH') |> 
+    relocate(Char_Name, .after = AU_GNIS_Name)
   
   
   ## AU Rollup -------------------------------------------------------------------------------------------------------
   
   
-  WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup, char_name_field = Char_Name)
+  WS_AU_rollup <- rollup_WS_AU(WS_GNIS_rollup_delist, char_name_field = Char_Name)
   WS_AU_rollup_joined <- WS_AU_prev_list(WS_AU_rollup) 
   
   
@@ -274,9 +276,12 @@ pH_assessment <- function(cont_data, grab_data, write_xlsx = TRUE){
   Other_data <-  Other_Assessment[["data"]]
   Other_categories <- Other_Assessment[["assessment"]]
   
-  other_category <- join_prev_assessments(Other_categories, AU_type = 'Other')
+  other_category <- join_prev_assessments(Other_categories, AU_type = 'Other')|> 
+    select(-Char_Name)
   
-  other_category_delist <-  assess_delist(other_category, type = "Other")
+  other_category_delist <-  assess_delist(other_category, type = "Other")|> 
+    mutate(Char_Name = 'pH') |> 
+    relocate(Char_Name, .after = AU_ID)
   
   
   # prep data for export --------------------------------------------------------------------------------------------
