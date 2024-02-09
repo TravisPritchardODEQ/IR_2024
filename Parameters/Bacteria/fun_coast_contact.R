@@ -1,6 +1,7 @@
 library(lubridate)
 library(runner)
 library(odeqIRtools)
+library(openxlsx)
 
 
 
@@ -31,7 +32,7 @@ coast_contact <- function(df, type = "coast", write_excel = TRUE, database = 'IR
   if(type == "coast"){
     
     Coastal <- df %>%
-      filter(Bacteria_code %in%  c(1, 3),
+      filter(Bacteria_code %in%  c(1, 3, 4),
              Char_Name == "Enterococcus")
   } else if (type == "freshwater") {
     Coastal <- df %>%
@@ -320,20 +321,19 @@ AU_display_other <- coast_AU_summary_no_WS_delist |>
   select(AU_ID, Char_Name, Pollu_ID, wqstd_code, period, prev_category, prev_rationale,
          final_AU_cat, Rationale, stations, recordID, status_change, Year_listed,  year_last_assessed)
 
-# AU_display_ws <- WS_AU_rollup_joined |> 
-#   rename(prev_category = prev_AU_category,
-#          prev_rationale = prev_AU_rationale,
-#          final_AU_cat = IR_category_AU_24,
-#          Rationale = Rationale_AU)
+AU_display_ws <- WS_AU_rollup_joined |>
+  rename(prev_category = prev_AU_category,
+         prev_rationale = prev_AU_rationale,
+         final_AU_cat = IR_category_AU_24,
+         Rationale = Rationale_AU)
 
 # 
-# AU_display <- bind_rows(AU_display_other, AU_display_ws) |> 
+# AU_display <- bind_rows(AU_display_other, AU_display_ws) |>
 #   mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
-#                                .default = Rationale))
-
-AU_display <- AU_display_other |> 
+#                                TRUE ~ Rationale))
+AU_display <-  bind_rows(AU_display_other, AU_display_ws) |> 
   mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
-                               .default = Rationale)) |> 
+                               TRUE ~ Rationale)) |> 
   join_TMDL(type = 'AU')|> 
   join_AU_info() |> 
   relocate(prev_category, .after = year_last_assessed) |> 
@@ -366,11 +366,11 @@ if(write_excel){
   writeData(wb = wb, sheet = "AU_Decisions", x = AU_display, headerStyle = header_st)
   
   writeData(wb = wb, sheet = "Other_AU_categorization", x = coast_AU_summary_no_WS_delist, headerStyle = header_st)
-  #writeData(wb = wb, sheet = "WS station categorization", x = WS_category, headerStyle = header_st)
-  #writeData(wb = wb, sheet = "WS GNIS categorization", x = WS_GNIS_rollup_delist, headerStyle = header_st)
+  writeData(wb = wb, sheet = "WS station categorization", x = coast_AU_summary_WS0, headerStyle = header_st)
+  writeData(wb = wb, sheet = "WS GNIS categorization", x = WS_GNIS_rollup_delist, headerStyle = header_st)
   
   writeData(wb = wb, sheet = "Coast Contact Raw Data", x = df, headerStyle = header_st)
-  #writeData(wb = wb, sheet = "Coast Contact WS Data", x = coast_contact_geomeans_no_WS, headerStyle = header_st )
+  writeData(wb = wb, sheet = "Coast Contact WS Data", x = coast_contact_geomeans_no_WS, headerStyle = header_st )
   writeData(wb = wb, sheet = "Coast Contact other Data", x = coast_contact_geomeans_no_WS, headerStyle = header_st )
   
 
