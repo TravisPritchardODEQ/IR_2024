@@ -40,7 +40,7 @@ tox_AL_penta_cat <- TOX_AL_penta_analysis(tox_AL_penta_data)
 
 
 #Copper_data("IR_Dev")
-Copper_categories <- copper_assessment(CU_file= 'Parameters/Tox_AL/Copper_criteria_results_2024.csv')
+Copper_categories <- copper_assessment(CU_file= "C:/Users/tpritch/Oregon/DEQ - Integrated Report Internal Review - IR 2024 Internal Review/NPDES Copper Reassessment/Copper_criteria_results_2024_3.csv")
 
 
 # Ammonia ---------------------------------------------------------------------------------------------------------
@@ -179,4 +179,4 @@ writeData(wb = wb, sheet =  "tox_AL_Copper_data"              , x = tox_AL_Coppe
 
 
 print("Writing excel doc")
-saveWorkbook(wb, "Parameters/Outputs/Tox_AL.xlsx", overwrite = TRUE) 
+saveWorkbook(wb, paste0("Parameters/Outputs/Tox_AL-", Sys.Date(), ".xlsx"), overwrite = TRUE) 

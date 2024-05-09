@@ -24,8 +24,8 @@ Bacteria_data <- function(database) {
   # Set factors to characters
   Results_import %>% map_if(is.factor, as.character) %>% as_tibble -> Results_import 
   
-  Results_import <- Results_import |> 
-    mutate(Result_UID = as.character(Result_UID))
+  # Results_import <- Results_import |> 
+  #   mutate(Result_UID = Result_UID)
   
   Results_import <- odeqIRtools::data_aggregation(Results_import)
   

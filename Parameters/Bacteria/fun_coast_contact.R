@@ -331,7 +331,7 @@ AU_display_ws <- WS_AU_rollup_joined |>
 # AU_display <- bind_rows(AU_display_other, AU_display_ws) |>
 #   mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
 #                                TRUE ~ Rationale))
-AU_display <-  bind_rows(AU_display_other, AU_display_ws) |> 
+AU_display <-  bind_rows(AU_display_other,  AU_display_ws) |> 
   mutate(Rationale = case_when(is.na(Rationale) ~ prev_rationale,
                                TRUE ~ Rationale)) |> 
   join_TMDL(type = 'AU')|> 

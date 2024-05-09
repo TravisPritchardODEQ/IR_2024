@@ -119,7 +119,7 @@ TOX_AL_analysis <- function(df, database = "IR_Dev"){
     # Change the Char_Name to Endosulfan and the Result_cen column to the summed value
     mutate(Char_Name = "Chlordane",
            Result_cen = Summed_values) %>%
-    select(-Summed_values, is_total, summed_censored_value,has_total_chlordane, -is_3d )
+    select(-Summed_values, -is_total, -summed_censored_value,-has_total_chlordane, -is_3d )
   
   # PCB data ----------------------------------------------------------------
   
@@ -166,6 +166,20 @@ TOX_AL_analysis <- function(df, database = "IR_Dev"){
     # get rid of extra columns that were created
     select(-Summed_values,  -Has_aroclor,  -is_aroclor, -summed_censored_value, -is_3d)
   
+
+# Chromium --------------------------------------------------------------------------------------------------------
+
+Chromium_data <- df  %>%
+    filter(Pollu_ID %in%  c('43', '188')) |> 
+    mutate(is_chrom_IV = case_when(Char_Name == 'Chromium(VI)' ~ 1,
+                                    TRUE ~ 0)) |> 
+    group_by(AU_ID) |> 
+    mutate(has_chrom_IV = ifelse(max(is_chrom_IV) == 1, 1, 0)) %>%
+    filter((has_chrom_IV == 1 & is_chrom_IV == 1) | has_chrom_IV == 0) %>%
+    mutate(IR_note = ifelse(Pollu_ID %in% c(188), "Total Chromium assessed as Chromium VI due to lack of chromium IV data in AU", "" )) |> 
+    select(-is_chrom_IV, -has_chrom_IV)
+             
+  
   # Put data back together --------------------------------------------------
   
   
@@ -174,10 +188,12 @@ TOX_AL_analysis <- function(df, database = "IR_Dev"){
     filter(Pollu_ID != 153) %>%
     filter(!Pollu_ID %in% c(48,49,50)) %>%
     filter(Pollu_ID != 27) %>%
+    filter(!Pollu_ID %in% c(43,188)) %>%
     bind_rows(endosulfan_data) %>%
     bind_rows(PCB_data) %>%
     bind_rows(DDT_data) %>%
-    bind_rows(Chlordane)
+    bind_rows(Chlordane) |> 
+    bind_rows(Chromium_data)
   
   
   Results_tox_AL_analysis <- results_analysis %>%
@@ -191,7 +207,7 @@ TOX_AL_analysis <- function(df, database = "IR_Dev"){
                                                ifelse(Sample_Fraction == "Dissolved"  |
                                                         Sample_Fraction == "Filtered, field"  |
                                                         Sample_Fraction == "Filtered, lab"  , "Dissolved", "Error"))) %>%
-    group_by(OrganizationID, MLocID, Char_Name, SampleStartDate,SampleStartTime, Analytical_method, act_depth_height) %>%
+    group_by(OrganizationID, MLocID, Char_Name, SampleStartDate,SampleStartTime, act_depth_height) %>%
     # If group has criteria fraction match, mark 1,itherwise mark with 0
     mutate(Has_Crit_Fraction = ifelse(Fraction == "Total" & max(Simplified_sample_fraction) == "Total", 1, 
                                       ifelse(Fraction == "Dissolved" & min(Simplified_sample_fraction) == "Dissolved", 1, 0 ))) %>%
@@ -278,12 +294,14 @@ TOX_AL_analysis <- function(df, database = "IR_Dev"){
                                                                                     num_samples, " total samples"),
                                  (num_samples_crit_excursion_calc < 10 | num_samples < 10 | num_sample_days < 10) & num_excursions_all == 1 ~ paste0("Insuffcient data: ", num_excursions_all,
                                                                                                                                                       " excursion of criteria with ",
-                                                                                                                                                      num_samples, " total samples"),
+                                                                                                                                                      num_samples, " total samples. ", 
+                                                                                                                                                     num_sample_days, " total sample days."),
                                  (Pollu_ID == 5 ) & num_excursions_all > 0 ~ paste0("Insuffcient data: ", "Analytical data indicates alkalinity is less than the criterion"),
                                  (num_samples_crit_excursion_calc < 10 | num_samples == 1 | num_sample_days < 10) & 
                                    num_excursions_all == 0 ~ paste0("Insuffcient data: ", num_excursions_all,
                                                                     " excursion of criteria with ",
-                                                                    num_samples, " total samples"),
+                                                                    num_samples, " total samples. ", 
+                                                                    num_sample_days, " total sample days."),
                                  num_samples_crit_excursion_calc == 0 & criteria_fraction == "Total" & num_excursions_all < critical_excursions ~ paste0("Insuffcient data: ", "Only dissolved fraction results available, criteria is 'Total' ",
                                                                                                                                                          num_excursions_all, " total excursions of ", 
                                                                                                                                                          num_samples, " total samples"),
@@ -300,11 +318,23 @@ TOX_AL_analysis <- function(df, database = "IR_Dev"){
     mutate(period = NA_character_) |> 
     mutate(Delist_eligability = case_when(num_samples >= 18 & num_excursions_all <= binomial_delisting(num_samples, 'Toxics')  ~ 1,
                                           TRUE ~ 0)) 
-    
+  
+  #Deal with Chromium
+  
+  Results_tox_AL_categories_chrom <- Results_tox_AL_categories |> 
+    mutate(IR_category = case_when((Char_Name == 'Chromium' & IR_category == '5') ~ "3B",
+                                    TRUE ~ IR_category),
+           Rationale = case_when(Char_Name == 'Chromium' ~ paste0("Total Chromium assessed as Chromium(VI). ", Rationale),
+                                 TRUE ~ Rationale),
+           Char_Name = case_when(Char_Name == 'Chromium' ~ "Chromium(VI)",
+                                 TRUE ~Char_Name ),
+           Pollu_ID = case_when(Pollu_ID == 188 ~ 43,
+                                TRUE ~ Pollu_ID),
+           )
   
 
   
-  return(Results_tox_AL_categories)
+  return(Results_tox_AL_categories_chrom)
   }
   
 Char_rename2 <- Char_rename |> 

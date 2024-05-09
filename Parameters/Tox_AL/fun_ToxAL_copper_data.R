@@ -30,6 +30,14 @@ Copper_data <- function(database){
   
   Results_import <- odeqIRtools::data_aggregation(Results_import)
   
+
+# get unused data -------------------------------------------------------------------------------------------------
+
+unused_data <- tbl(con, 'Unused_Results')  |> 
+    select(Result_UID) |> 
+    collect() |> 
+    pull()
+  
   
   print(paste("Returned", nrow(Results_import), "results from", length(unique(Results_import$MLocID)), "monitoring locations"))
   
@@ -43,6 +51,7 @@ Copper_data <- function(database){
 ,[Char_Name]
 ,[Result_Unit]
 ,[Unit_UID]
+,[Result_UID]
 ,[Sample_Fraction]
 ,[IRResultNWQSunit]
 ,[IRWQSUnitName]
@@ -61,6 +70,7 @@ WHERE chr_uid in ('2849', '1648', '727', '1244', 1802, 1709, 1827, 773, 544, 100
   
   
   spread <- Results_ancillary %>%
+    filter(!Result_UID %in% unused_data) |> 
     mutate(Char_Name = ifelse(chr_uid %in% c(544, 100331), 'Alkalinity', 
                               ifelse(chr_uid %in% c(1097, 1099), 'Hardness', 
                                      ifelse(chr_uid == 2174 & Sample_Fraction == "Total" , 'TOC', 
@@ -93,6 +103,6 @@ WHERE chr_uid in ('2849', '1648', '727', '1244', 1802, 1709, 1827, 773, 544, 100
     left_join(spread, by = c("MLocID", "SampleStartDate", "Result_Depth")) %>%
     arrange(MLocID, SampleStartDate, SampleStartTime)
   
-  write.csv(copper_data, "Parameters/Tox_AL/Copper_data_4_BLM.csv", row.names = FALSE)
+  write.csv(copper_data, paste0("Parameters/Tox_AL/Copper_data_4_BLM-",Sys.Date(), ".csv"), row.names = FALSE)
   
 }

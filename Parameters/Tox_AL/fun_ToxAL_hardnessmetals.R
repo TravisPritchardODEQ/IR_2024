@@ -56,6 +56,7 @@ Hardness_based_metals <- function(database){
                                 ,[IRResultNWQSunit]
                                 ,[Result_Depth]
                                 ,[IRWQSUnitName]
+                                ,[Result_UID]
                                 FROM [IntegratedReport].[dbo].[ResultsRawWater]
                                 WHERE chr_uid in (1097, 727, 1244) 
                                 AND (Statistical_Base IS NULL)
@@ -64,6 +65,15 @@ Hardness_based_metals <- function(database){
   
   #Query to get ancillary data
   Results_ancillary <- DBI::dbGetQuery(con, ancillary_qry)
+  
+  exclude_data <- tbl(con, 'Unused_Results') |> 
+    select(Result_UID) |> 
+    collect() |> 
+    pull(Result_UID)
+  
+  Results_ancillary <- Results_ancillary |> 
+    filter(!Result_UID %in% exclude_data)
+  
   
   
   print("Joining ancillary data")
@@ -188,7 +198,7 @@ Hardness_based_metals <- function(database){
     
     # Testing ---------------------------------------------------------------------------------------------------------
     # df_data = Results_censored
-    # AU_type = 'WS'
+    # AU_type = 'other'
     # 
     if(AU_type == "other"){  
       group1 <- c('AU_ID', 'Pollu_ID', 'wqstd_code', 'Char_Name')
@@ -211,6 +221,7 @@ Hardness_based_metals <- function(database){
     summarise(stations =  stringr::str_c(unique(MLocID), collapse = "; "),
               criteria_fraction = first(Crit_fraction),
               num_samples = n(),
+              num_sample_days = n_distinct(SampleStartDate),
               percent_3d = round(sum(Result_Operator == "<" & IRResultNWQSunit > crit )/num_samples * 100),
               num_fraction_types = n_distinct(Simplfied_Sample_Fraction),
               num_samples_total_fraction = sum(Simplfied_Sample_Fraction == "Total"),
@@ -227,7 +238,7 @@ Hardness_based_metals <- function(database){
                                    num_samples >= 2 & criteria_fraction == "Total" & num_excursions_all >= critical_excursions ~ "5",
                                    num_samples < 10 & num_excursions_all >= 1 ~ "3B",
                                    criteria_fraction == "Dissolved" & num_excursions_total_fraction > 0 & num_Samples_dissolved_fraction == 0 ~ "3B",
-                                   num_samples_crit_excursion_calc < 10 & num_excursions_all == 0 ~ "3",
+                                   (num_samples_crit_excursion_calc < 10 | num_samples < 10 | num_sample_days < 10)  ~ "3",
                                   
                                    num_samples >= 10 & num_excursions_dissolved_fraction < critical_excursions ~ "2"
                                    ),
@@ -245,9 +256,10 @@ Hardness_based_metals <- function(database){
                                  criteria_fraction == "Dissolved" & num_excursions_total_fraction > 0 & num_Samples_dissolved_fraction == 0 ~ paste0("Insufficient data: ", "Only total fraction results available, criteria is 'Dissolved' ",
                                                                                                                                                      num_excursions_all, " total excursions of ", 
                                                                                                                                                      num_samples, " total samples"),
-                                 num_samples_crit_excursion_calc < 10 & num_excursions_all == 0 ~ paste0("Insufficient data: ", num_excursions_all,
+                                 (num_samples_crit_excursion_calc < 10 | num_samples < 10 | num_sample_days < 10)  ~ paste0("Insufficient data: ", num_excursions_all,
                                                                                                          " excursion of criteria with ",
-                                                                                                         num_samples, " total samples"),
+                                                                                                         num_samples, " total samples. ", num_sample_days,
+                                                                                                         " total sample days"),
                                  
                                  num_samples >= 10 & num_excursions_dissolved_fraction < critical_excursions ~ paste0("Attaining: ", num_excursions_all, " excursions is less than ",
                                                                                                  critical_excursions, " needed to list- ",
@@ -258,9 +270,21 @@ Hardness_based_metals <- function(database){
     mutate(period = NA_character_) |> 
     mutate(Delist_eligability = case_when(num_samples >= 18 & num_excursions_dissolved_fraction <= binomial_delisting(num_samples, 'Toxics')  ~ 1,
                                           TRUE ~ 0)) 
+  
+  
+  #Deal with Chromium
+  
+  Results_tox_AL_HBM_cats_chrom <- Results_tox_AL_HBM_cats |> 
+    mutate(Rationale = case_when(Char_Name == 'Chromium' ~ paste0("Total Chromium assessed as Chromium(III). ", Rationale),
+                                 TRUE ~ Rationale),
+           Char_Name = case_when(Char_Name == 'Chromium' ~ "Chromium(III)",
+                                 TRUE ~Char_Name ),
+           Pollu_ID = case_when(Pollu_ID == 188 ~ 42,
+                                TRUE ~ Pollu_ID),
+    )
              
     
-  return(Results_tox_AL_HBM_cats)
+  return(Results_tox_AL_HBM_cats_chrom)
   
   }
  

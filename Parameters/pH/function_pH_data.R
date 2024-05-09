@@ -28,7 +28,7 @@ cont_ph_raw <- function(database) {
   
   
   Results_import_grab  <- Results_import_grab|> 
-    mutate(Result_UID = as.character(Result_UID))
+    mutate(Result_UID = as.integer(Result_UID))
   
   Results_import_grab <- odeqIRtools::data_aggregation(Results_import_grab)
   
