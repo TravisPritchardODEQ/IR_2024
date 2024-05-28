@@ -7,30 +7,30 @@ library(duckdb)
 
 
 
-filepath <- 'C:/Users/tpritch/Oregon/DEQ - Integrated Report - IR 2024/Code Outputs/Draft Outputs/'
+filepath <- 'C:/Users/tpritch/Oregon/DEQ - Integrated Report - IR 2024/DraftList/Public Draft/Parameter Assessments/'
 
 # Filenames -------------------------------------------------------------------------------------------------------
 
-bact_coast <- 'Done-bacteria coast contact- 2024-01-25.xlsx'
-bact_fresh <- 'Done-bacteria_freshwater_contact-2024-01-24.xlsx'
+bact_coast <- 'bacteria coast contact- 2024-02-13 run2.xlsx'
+bact_fresh <- 'bacteria_freshwater_contact-2024-02-13.xlsx'
 
-chl <- 'Done-chl-a-2024-01-25.xlsx'
+chl <- 'chl-a-2024-01-25.xlsx'
 
-DO <- 'Done - DO-2024-01-31.xlsx'
+DO <- 'DO-2024-01-31v2.xlsx'
 
-pH <- 'Done pH-2024-02-06.xlsx'
+pH <- 'pH-2024-02-06.xlsx'
 
-temp <- 'KSE-temperature-2024-01-26.xlsx'
+temp <- 'temperature-2024-01-26.xlsx'
 
-tox_al <- 'Done-Tox_AL.xlsx'
+tox_al <- 'Tox_AL-2024-04-05.xlsx'
 
-tox_hh <- 'Done-Tox_HH-2024-01-26.xlsx'
+tox_hh <- 'Tox_HH-2024-01-26.xlsx'
 
-turb <- 'Done-turbidity-2024-01-26.xlsx'
+turb <- 'turbidity-2024-01-26.xlsx'
 
-biocriteria <- 'Done - Biocriteria-2024-02-02.xlsx'
+biocriteria <- 'Biocriteria-2024-02-02.xlsx'
 
-non_R <- 'Done-non_R-2024-01-25.xlsx'
+non_R <- 'non_R-2024-04-10.xlsx'
 
 
 # Pull data in ----------------------------------------------------------------------------------------------------
@@ -201,7 +201,15 @@ antijoin <- odeqIRtools::prev_list_AU |>
 
 
 AU_decisions_joined <- AU_decisions_joined |> 
-  bind_rows(antijoin)
+  bind_rows(antijoin) |> 
+  filter(!AU_ID %in% c('OR_OC_01_1710020102_107236',
+                      'OR_OC_01_1710020702_107237',
+                      'OR_OC_01_1710030405_107238',
+                      'OR_OC_01_1710030605_107239',
+                      'OR_OC_1710020310_01_107239',
+                      'OR_OC_1710020410_01_107243',
+                      'OR_OC_1710020508_01_107242',
+                      'OR_OC_1710031206_01_107241'))
 
 
 
@@ -223,11 +231,13 @@ Char_rename <- Char_rename |>
 
 
 AU_decisions <- AU_decisions_joined |> 
+  mutate(HUC12 = as.character(HUC12)) |> 
   select(-Char_Name) |> 
   left_join(Char_rename) |> 
   relocate(Char_Name, .after = AU_ID)|> 
   select(-AU_Name, -AU_UseCode, -HUC12) |> 
   join_AU_info() |> 
+  mutate(HUC12 = as.character(HUC12)) |> 
   join_hucs() |> 
   arrange(AU_ID, Char_Name)
 
@@ -245,6 +255,26 @@ DBI::dbDisconnect(con)
 AU_decisions <- AU_decisions |> 
   left_join(wqstd_info) |> 
   relocate(Assessment, .after = Char_Name)
+
+
+
+# fecal delistings ------------------------------------------------------------------------------------------------
+
+fecal_delistings <- read.xlsx(paste0(filepath, "Fecal Coliform Delist.xlsx")) |> 
+  pull(AU_ID)
+
+AU_decisions <- AU_decisions |> 
+  mutate(final_AU_cat = case_when(AU_ID %in% fecal_delistings & Pollu_ID == '86' & wqstd_code == '1' ~ '2',
+                                  TRUE ~ final_AU_cat),
+         Rationale = case_when(AU_ID %in% fecal_delistings & Pollu_ID == '86' & wqstd_code == '1' ~ 'Delist: Criteria Change - 2024 E. Coli assessment = Attaining - No Shell Fish Harvest Sub-Use in AU',
+                               TRUE ~ Rationale),
+         status_change = case_when(AU_ID %in% fecal_delistings & Pollu_ID == '86' & wqstd_code == '1' ~ 'Delist',
+                                   TRUE ~ status_change),
+         
+  )
+         
+         
+
 
 # GNIS ------------------------------------------------------------------------------------------------------------
 
@@ -304,10 +334,34 @@ GNIS_decisions <- GNIS_decisions |>
 
 
 
+
+
+
+# TMDL updates from public comment --------------------------------------------------------------------------------
+
+source(file = 'TNDL_error_update_internal_review.R')
+
+
+AU_decisions <- AU_decisions |> 
+  left_join(TMDL_updates, by = c('AU_ID', 'Pollu_ID', 'wqstd_code', 'period')) |> 
+  mutate(final_AU_cat = case_when(!is.na(New.category) ~ New.category,
+                                  TRUE ~ final_AU_cat),
+         TMDLs = case_when(!is.na(New.category) ~ TMDLs.new,
+                                  TRUE ~ TMDLs),
+         action_ids = case_when(!is.na(New.category) ~ action_ids.new,
+                           TRUE ~ action_ids),
+         TMDL_pollutants = case_when(!is.na(New.category) ~ TMDL_pollutants.new,
+                                TRUE ~ TMDL_pollutants),
+         TMDL_Periods = case_when(!is.na(New.category) ~ TMDL_Periods.new,
+                                     TRUE ~ TMDL_Periods),
+         
+  ) |> 
+  select(-(32:36)) |> 
+  distinct()
+
 # Clear all but needed --------------------------------------------------------------------------------------------
 
-#rm(list=setdiff(ls(), c("GNIS_decisions", 'AU_decisions')))
-
+rm(list=setdiff(ls(), c("GNIS_decisions", 'AU_decisions')))
 
 # Ben use ---------------------------------------------------------------------------------------------------------
 
@@ -332,16 +386,16 @@ LU_benuses$ben_use_code <- as.numeric(LU_benuses$ben_use_code)
 #get a list of AU ben use codes
 AU_to_ben_use <- AU_decisions %>%
   select(AU_ID, AU_UseCode) %>%
-  distinct()
+  distinct() |> 
   mutate(AU_UseCode = as.character(AU_UseCode))
   
   
   
   
-  # This is a long form table of all the benefical uses that apply to a given AU
+  # This is a long form table of all the beneficial uses that apply to a given AU
   all_ben_uses <- AU_to_ben_use %>%
     mutate(ben_use_code = as.numeric(AU_UseCode)) %>%
-    left_join(LU_benuses) %>%
+    left_join(LU_benuses, relationship = "many-to-many") %>%
     filter(!is.na(ben_use),
            ben_use != "NULL")
   
@@ -353,6 +407,7 @@ AU_to_ben_use <- AU_decisions %>%
   
   AU_BU <- AU_decisions %>%
     left_join(select(LU_BU_Assessment, -Assessment), by = c("Pollu_ID", 'wqstd_code'), relationship = "many-to-many" ) %>%
+    mutate(AU_UseCode = as.character(AU_UseCode)) |> 
     right_join(all_ben_uses_2) %>%
     select(-keep) %>%
     filter(!is.na(Char_Name))
@@ -373,7 +428,7 @@ AU_to_ben_use <- AU_decisions %>%
                                TRUE ~ ben_use
     )) |> 
     mutate(final_AU_cat = factor(final_AU_cat, 
-                                 levels=c("Unassessed", '3D',"3", "3B", "3C", "2", '4B', '4C', '4','4A', "5" ), ordered=TRUE)) %>%
+                                 levels=c("Unassessed", '3D',"3", "3B", "3C", "2", '4B', '4C', '4','4A','5C', "5" ), ordered=TRUE)) %>%
     group_by(AU_ID, ben_use) %>%
     summarise(AU_Name = max(AU_Name, na.rm = TRUE),
               Category = max(final_AU_cat),
@@ -384,7 +439,8 @@ AU_to_ben_use <- AU_decisions %>%
     select(-ben_use_id) %>%
     group_by(AU_ID) %>%
     mutate(AU_Name = max(AU_Name, na.rm = TRUE)) |> 
-    relocate(AU_Name, .after='AU_ID')
+    relocate(AU_Name, .after='AU_ID') |> 
+    arrange(AU_ID)
   
   
   
@@ -400,22 +456,31 @@ AU_to_ben_use <- AU_decisions %>%
 # Map display -----------------------------------------------------------------------------------------------------
 
   
-  maps_display <- AU_decisions |> 
+  #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ 
+  #Add 5C to category 5 counts!!!!!!!!!!!!!!
+
+  
+  
+  
+  
+  
+    map_display <- AU_decisions |> 
     mutate(final_AU_cat = factor(final_AU_cat, 
-                                 levels=c("Unassessed", '3D',"3", "3B", "3C", "2", '4B', '4C', '4','4A', "5" ), ordered=TRUE)) |> 
+                                 levels=c('Unassessed', '3D',"3", "3B","3C", "2", "5",'5C', '4A', '4B', '4C'), ordered=TRUE)) |> 
     mutate(pollutant_strd = case_when(!is.na(period) ~ paste0(Char_Name, "- ", period),
                                       wqstd_code == 15 ~  paste0(Char_Name, "- Aquatic Life Toxics"),
                                       wqstd_code == 16 ~  paste0(Char_Name, "- Human Health Toxics"),
                                       TRUE ~ Char_Name
     )) |> 
     group_by(AU_ID) %>%
-    summarise(AU_status = case_when(any(str_detect(final_AU_cat, '5') | str_detect(final_AU_cat, '4'))~ 'Impaired',
+    summarise(AU_status = case_when(any(str_detect(final_AU_cat, '5') | str_detect(final_AU_cat, '4') | str_detect(final_AU_cat, '5C'))~ 'Impaired',
                                     any(str_detect(final_AU_cat, '2')) ~ "Attaining",
                                     all(str_detect(final_AU_cat, '3')) ~ "Insufficient Data",
                                     TRUE ~ "ERROR"),
               year_last_assessed = max(year_last_assessed, na.rm = TRUE),
               Year_listed = ifelse(AU_status == 'Impaired', as.integer(min(Year_listed),  na.rm = TRUE), NA_integer_ ) ,
-    Cat_5_count = length(pollutant_strd[final_AU_cat == '5']),
+    Cat_5_count = length(pollutant_strd[final_AU_cat == '5' | final_AU_cat == '5C']),
     Cat_4_count = length(pollutant_strd[str_detect(final_AU_cat, '4')]),
     Impaired_count = Cat_5_count + Cat_4_count,
     Impaired_parameters = str_flatten(unique(pollutant_strd[!is.na(final_AU_cat) & (str_detect(final_AU_cat, '5') | str_detect(final_AU_cat, '4'))]), ", "),
@@ -428,4 +493,52 @@ AU_to_ben_use <- AU_decisions %>%
     Insufficient_parameters = str_flatten(unique(pollutant_strd[!is.na(final_AU_cat) & str_detect(final_AU_cat, '3')]), ", ")
     )
     
+  map_display_GNIS <- GNIS_decisions |> 
+    mutate(final_GNIS_cat = factor(final_GNIS_cat, 
+                                   levels=c('Unassessed', '3D',"3", "3B","3C", "2", "5",'5C', '4A', '4B', '4C'), ordered=TRUE)) |> 
+    mutate(pollutant_strd = case_when(!is.na(period) ~ paste0(Char_Name, "- ", period),
+                                      wqstd_code == 15 ~  paste0(Char_Name, "- Aquatic Life Toxics"),
+                                      wqstd_code == 16 ~  paste0(Char_Name, "- Human Health Toxics"),
+                                      TRUE ~ Char_Name
+    )) |> 
+    group_by(AU_ID, AU_GNIS_Name) %>%
+    summarise(AU_status = case_when(any(str_detect(final_GNIS_cat, '5') | str_detect(final_GNIS_cat, '4')| str_detect(final_GNIS_cat, '5C'))~ 'Impaired',
+                                    any(str_detect(final_GNIS_cat, '2')) ~ "Attaining",
+                                    all(str_detect(final_GNIS_cat, '3')) ~ "Insufficient Data",
+                                    TRUE ~ "ERROR"),
+              #year_last_assessed = max(year_last_assessed, na.rm = TRUE),
+              #Year_listed = ifelse(AU_status == 'Impaired', as.integer(min(Year_listed),  na.rm = TRUE), NA_integer_ ) ,
+              Cat_5_count = length(pollutant_strd[final_GNIS_cat == '5' | final_GNIS_cat == '5C']),
+              Cat_4_count = length(pollutant_strd[str_detect(final_GNIS_cat, '4')]),
+              Impaired_count = Cat_5_count + Cat_4_count,
+              Impaired_parameters = str_flatten(unique(pollutant_strd[!is.na(final_GNIS_cat) & (str_detect(final_GNIS_cat, '5') | str_detect(final_GNIS_cat, '4'))]), ", "),
+              Cat_2_count = length(pollutant_strd[final_GNIS_cat == '2']),
+              Attaining_parameters = str_flatten(unique(pollutant_strd[!is.na(final_GNIS_cat) & final_GNIS_cat == '2']), ", "),
+              Cat_3_count = length(pollutant_strd[final_GNIS_cat == '3']),
+              Cat_3B_count = length(pollutant_strd[final_GNIS_cat == '3B']),
+              Cat_3D_count = length(pollutant_strd[final_GNIS_cat == '3D']),
+              Cat_3_count_total = sum(Cat_3_count, Cat_3B_count, Cat_3D_count),
+              Insufficient_parameters = str_flatten(unique(pollutant_strd[!is.na(final_GNIS_cat) & str_detect(final_GNIS_cat, '3')]), ", ")
+    )
+    
+  
+
+# Write excel -----------------------------------------------------------------------------------------------------
+
+  
+  print_list <- list('AU_decisions'    = AU_decisions      ,
+                     'GNIS_decisions'  = GNIS_decisions    ,
+                     'AU_BU'           = AU_BU             ,
+                     'BU_rollup'       = BU_rollup         ,
+                     'BU_rollup_wide'  = BU_rollup_wide    ,
+                     'map_display'     = map_display      ,
+                     "map_display_GNIS" = map_display_GNIS)
+              
+  
+ write.xlsx(print_list, file = paste0("IR_2024_Rollup-", Sys.Date(),  ".xlsx") )
+ 
+ 
+ save(print_list, file = 'draft_list/draft_list.Rdata')
+ 
+
 

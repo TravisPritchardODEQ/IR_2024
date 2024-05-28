@@ -350,7 +350,7 @@ if(write_xlsx){
   writeData(wb = wb, sheet = "pH other Data", x = Other_data, headerStyle = header_st )
   
   print("Writing excel doc")
-  saveWorkbook(wb, paste0("Parameters/Outputs/pH-",Sys.Date(), "test.xlsx"), overwrite = TRUE) 
+  saveWorkbook(wb, paste0("Parameters/Outputs/pH-",Sys.Date(), ".xlsx"), overwrite = TRUE) 
   
 }
   

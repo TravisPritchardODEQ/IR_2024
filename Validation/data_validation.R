@@ -13,6 +13,9 @@
 #' * Sample_Fraction
 #' * IRWQSUnitName
 #' * Statistical_Base
+#' 
+#' @param database odbc connection name of database to pull from
+#' @export
 
 
 validate_data <- function(database = "IR_Dev"){
