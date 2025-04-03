@@ -6,7 +6,7 @@ library(openxlsx)
 
 # Bring in assessments --------------------------------------------------------------------------------------------
 
-AU_decision_import <- read.xlsx("C:/Users/tpritch/Oregon/DEQ - Integrated Report - IR 2024/DraftList/Public Draft/IR_2024_Rollup-2024-04-16_w_TMDL_Priority_Rankings.xlsx")
+AU_decision_import <- read.xlsx("C:/Users/tpritch/Oregon/DEQ - Integrated Report - IR 2024/Final List/IR_2024_Rollup-post_public_comment.xlsx")
 
 
 
@@ -21,27 +21,67 @@ new_Assessments <- AU_decision_import |>
 # Delistings ------------------------------------------------------------------------------------------------------
 
 
-delist <- AU_decisions |> 
-  filter(status_change == 'Delist')
+delist <- read.xlsx("C:/Users/tpritch/Oregon/DEQ - Integrated Report - IR 2024/Final List/DEQ_IR2024_Delistings.xlsx",
+                    sheet = 'Delistings - Remove from 303(d)')
 
 
 
 delist_param <- delist |> 
-  group_by(Char_Name) |> 
+  group_by(Parameter_Name) |> 
   summarise(count = n()) |> 
   arrange(count)
 
 ggplot(delist_param) +
-  geom_col(aes(x = fct_reorder(Char_Name, count, .desc = TRUE), y = count))+
+  geom_col(aes(x = fct_reorder(Parameter_Name, count, .desc = TRUE), y = count))+
   labs(y = "Num. Delistings",
        title = "2024 IR Delistings")+
   theme_bw() +
   theme(axis.title.x=element_blank(),
         text = element_text(size=18))+
   scale_y_continuous(expand = c(0, 0), limits = c(0, 45))
- 
 
 
+
+delistings <- delist |> 
+  mutate(Parameter_Name = str_trim(Parameter_Name, side  = 'both')) |> 
+  mutate(reason = case_when(ATTAINS_CODE == 'WQS_NEW_DATA' ~ "New data shows\nattainment of standard",
+                            ATTAINS_CODE == 'DELISTING_ORIG_INCORRECT' ~ "Error correction",
+                            ATTAINS_CODE == 'WQS_STANDARDS_CHANGED' ~ "Fecal coliform standard\nno longer applies.",
+                            ATTAINS_CODE == 'DELISTING_4A' ~ "TMDL in effect.\nRemains impaired" ),
+         assess_type = case_when(Assessment == "Toxic Substances - Aquatic Life" ~ "Aquatic Life",
+                                 Assessment == "HABS- Recreation" ~ "Recreation",
+                                 Assessment == "Toxic Substances - Human Health" ~ "Human Health",
+                                 TRUE ~ NA_character_)) 
+
+
+delistings_summary <- delistings |> 
+  group_by(reason) |> 
+  summarise(n = n())
+
+ggplot(delistings_summary, aes(x="", y=n, fill=reason)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  theme_void() # remove background, grid, numeric labels
+
+
+library(plotly)
+
+p <- plot_ly(delistings_summary, labels = ~reason, values = ~n, type = 'pie',textposition = 'inside',textinfo = 'label', marker = list(colors =  wesanderson::wes_palettes$AsteroidCity3)) %>%
+  layout(#title = 'Delistings',
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE))
+
+p <- hide_legend(p)
+add_trace(p)
+
+export(p, file = "delist_reasons_pie.png")
+
+
+write.excel <- function(x,row.names=FALSE,col.names=TRUE,...) {
+  write.table(x,"clipboard",sep="\t",row.names=row.names,col.names=col.names,...)
+}
+
+write.excel(delistings_summary)
 
 # Data Sources ----------------------------------------------------------------------------------------------------
 
@@ -275,7 +315,8 @@ LU_Pollutant <- LU_Pollutant_import |>
            
            
          )) |> 
-  select(Pollu_ID, Attains_group3)
+  select(Pollu_ID, Attains_group3) |> 
+  mutate(Pollu_ID = as.character(Pollu_ID))
   
   
 
@@ -297,11 +338,12 @@ graph_data <- AU_decisions |>
   select(Attains_group3, status) |> 
   filter(!is.na(Attains_group3)) |> 
   mutate(status = factor(status, ordered = TRUE, 
-                         levels = c("Insufficient", "Impaired", "Attain")))
+                         levels = c("Impaired", "Attain", "Insufficient")))
 
 
 IR_colors <-  c("#01856F", "#D5B502", "#9A00C4")
 names(IR_colors) <- c('Attain', "Insufficient", "Impaired")
+
 
 ggplot(graph_data, aes(Attains_group3, fill = status))+
   coord_flip()+
